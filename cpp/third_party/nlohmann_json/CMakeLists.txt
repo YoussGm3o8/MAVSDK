@@ -22,6 +22,13 @@ if(IOS)
         )
 endif()
 
+# DOWNLOAD_EXTRACT_TIMESTAMP was added in CMake 3.24. Older CMake versions
+# already preserve archive timestamps, so only pass the option when supported.
+set(DOWNLOAD_OPTIONS)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+    list(APPEND DOWNLOAD_OPTIONS DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+endif()
+
 message(STATUS "Preparing external project \"nlohmann_json\" with args:")
 foreach(CMAKE_ARG ${CMAKE_ARGS})
     message(STATUS "-- ${CMAKE_ARG}")
@@ -31,7 +38,7 @@ ExternalProject_add(
     nlohmann_json
     URL https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
     URL_HASH SHA256=4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    ${DOWNLOAD_OPTIONS}
     PREFIX nlohmann_json
     CMAKE_ARGS "${CMAKE_ARGS}"
     )

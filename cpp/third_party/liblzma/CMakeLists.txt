@@ -23,6 +23,13 @@ if(IOS)
         )
 endif()
 
+# DOWNLOAD_EXTRACT_TIMESTAMP was added in CMake 3.24. Older CMake versions
+# already preserve archive timestamps, so only pass the option when supported.
+set(DOWNLOAD_OPTIONS)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+    list(APPEND DOWNLOAD_OPTIONS DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+endif()
+
 message(STATUS "Preparing external project \"liblzma\" with args:")
 foreach(CMAKE_ARG ${CMAKE_ARGS})
     message(STATUS "-- ${CMAKE_ARG}")
@@ -32,6 +39,6 @@ ExternalProject_Add(
         liblzma
         URL https://github.com/tukaani-project/xz/releases/download/v5.4.5/xz-5.4.5.tar.gz
         URL_HASH SHA256=135c90b934aee8fbc0d467de87a05cb70d627da36abe518c357a873709e5b7d6
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        ${DOWNLOAD_OPTIONS}
         CMAKE_ARGS "${CMAKE_ARGS}"
 )
