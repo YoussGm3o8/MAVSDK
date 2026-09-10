@@ -30,6 +30,8 @@ endforeach()
 ExternalProject_add(
     nlohmann_json
     URL https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
+    URL_HASH SHA256=4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     PREFIX nlohmann_json
     CMAKE_ARGS "${CMAKE_ARGS}"
     )
