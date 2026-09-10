@@ -28,7 +28,7 @@ endforeach()
 ExternalProject_add(
     picosha2
     GIT_REPOSITORY https://github.com/julianoes/PicoSHA2
-    GIT_TAG cmake-install-support
+    GIT_TAG 1bf940d8a03bb752604fbb366d47b97b50b9e6ce
     PREFIX picosha2
     CMAKE_ARGS ${CMAKE_ARGS}
     )
