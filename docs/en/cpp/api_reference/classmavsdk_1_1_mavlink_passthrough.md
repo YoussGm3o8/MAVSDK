@@ -47,7 +47,9 @@ DEPRECATED | [MavlinkPassthrough](#classmavsdk_1_1_mavlink_passthrough_1acddc4bd
 DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) | [send_message](#classmavsdk_1_1_mavlink_passthrough_1a9bbd09d34f7ae1b6e27bcd5c3d4ba667) (mavlink_message_t & message) | Send message (deprecated).
 DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) | [queue_message](#classmavsdk_1_1_mavlink_passthrough_1a272f72328f6298eb80332edacc0f7d38) (std::function< mavlink_message_t([MavlinkAddress](struct_mavlink_address.md) mavlink_address, uint8_t channel)> fun) | Send message by queueing it.
 DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) | [send_command_long](#classmavsdk_1_1_mavlink_passthrough_1a3c0d1373da35e5812ed1f70215ffa095) (const [CommandLong](structmavsdk_1_1_mavlink_passthrough_1_1_command_long.md) & command) | Send a MAVLink command_long.
+DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) | [send_command_long](#classmavsdk_1_1_mavlink_passthrough_1a18d5789002c2c971a1254337222d16be) (const [CommandLong](structmavsdk_1_1_mavlink_passthrough_1_1_command_long.md) & command, const [OperationOptions](structmavsdk_1_1_operation_options.md) & options) | Send a MAVLink command_long with an overall operation timeout.
 DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) | [send_command_int](#classmavsdk_1_1_mavlink_passthrough_1aaad7aef7c0f7009e31aed0470483db2b) (const [CommandInt](structmavsdk_1_1_mavlink_passthrough_1_1_command_int.md) & command) | Send a MAVLink command_long.
+DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) | [send_command_int](#classmavsdk_1_1_mavlink_passthrough_1af70835b95bcfea0ea9c251bda10557e9) (const [CommandInt](structmavsdk_1_1_mavlink_passthrough_1_1_command_int.md) & command, const [OperationOptions](structmavsdk_1_1_operation_options.md) & options) | Send a MAVLink command_int with an overall operation timeout.
 DEPRECATED mavlink_message_t | [make_command_ack_message](#classmavsdk_1_1_mavlink_passthrough_1aa8249ee0baa0b346e4ed46e057dad73b) (const uint32_t target_sysid, const uint8_t target_compid, const uint16_t command, MAV_RESULT result) | Create a command_ack.
 DEPRECATED std::pair< [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793), int32_t > | [get_param_int](#classmavsdk_1_1_mavlink_passthrough_1a7abe72a086741674ae6a27d545b4ccc3) (const std::string & name, std::optional< uint8_t > maybe_component_id, bool extended) | Request param (int).
 DEPRECATED std::pair< [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793), float > | [get_param_float](#classmavsdk_1_1_mavlink_passthrough_1a1d537c9ad28f89fa220c7a1aadf83668) (const std::string & name, std::optional< uint8_t > maybe_component_id, bool extended) | Request param (float).
@@ -241,6 +243,25 @@ Send a MAVLink command_long.
 
 &emsp;DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) - result of the request.
 
+### send_command_long() {#classmavsdk_1_1_mavlink_passthrough_1a18d5789002c2c971a1254337222d16be}
+```cpp
+DEPRECATED Result mavsdk::MavlinkPassthrough::send_command_long(const CommandLong &command, const OperationOptions &options)
+```
+
+
+Send a MAVLink command_long with an overall operation timeout.
+
+The timeout includes queueing and all internal retries.
+
+**Parameters**
+
+* const [CommandLong](structmavsdk_1_1_mavlink_passthrough_1_1_command_long.md)& **command** - 
+* const [OperationOptions](structmavsdk_1_1_operation_options.md)& **options** - 
+
+**Returns**
+
+&emsp;DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) - 
+
 ### send_command_int() {#classmavsdk_1_1_mavlink_passthrough_1aaad7aef7c0f7009e31aed0470483db2b}
 ```cpp
 DEPRECATED Result mavsdk::MavlinkPassthrough::send_command_int(const CommandInt &command)
@@ -257,6 +278,25 @@ Send a MAVLink command_long.
 **Returns**
 
 &emsp;DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) - result of the request.
+
+### send_command_int() {#classmavsdk_1_1_mavlink_passthrough_1af70835b95bcfea0ea9c251bda10557e9}
+```cpp
+DEPRECATED Result mavsdk::MavlinkPassthrough::send_command_int(const CommandInt &command, const OperationOptions &options)
+```
+
+
+Send a MAVLink command_int with an overall operation timeout.
+
+The timeout includes queueing and all internal retries.
+
+**Parameters**
+
+* const [CommandInt](structmavsdk_1_1_mavlink_passthrough_1_1_command_int.md)& **command** - 
+* const [OperationOptions](structmavsdk_1_1_operation_options.md)& **options** - 
+
+**Returns**
+
+&emsp;DEPRECATED [Result](classmavsdk_1_1_mavlink_passthrough.md#classmavsdk_1_1_mavlink_passthrough_1a265eacaeea064a31de3fe16d1e357793) - 
 
 ### make_command_ack_message() {#classmavsdk_1_1_mavlink_passthrough_1aa8249ee0baa0b346e4ed46e057dad73b}
 ```cpp

@@ -37,8 +37,10 @@ Type | Name | Description
 &nbsp; | [~Param](#classmavsdk_1_1_param_1a33f67b5c3daea8ca3af8c573f4e07153) () override | Destructor (internal use only).
 &nbsp; | [Param](#classmavsdk_1_1_param_1ab7a03a825118c944d31c562594826f72) (const [Param](classmavsdk_1_1_param.md) & other) | Copy constructor.
 std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), int32_t > | [get_param_int](#classmavsdk_1_1_param_1a23e4fe22bcef677fe9bb291a8f7d56c5) (std::string name)const | Get an int parameter.
+std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), int32_t > | [get_param_int](#classmavsdk_1_1_param_1ad7fb26697b03f8aedad52bf043f56664) (std::string name, const [OperationOptions](structmavsdk_1_1_operation_options.md) & options)const | Get an int parameter with an overall operation timeout.
 [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df) | [set_param_int](#classmavsdk_1_1_param_1af8124bae8b4649605a51fe2943ae8414) (std::string name, int32_t value)const | Set an int parameter.
 std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), float > | [get_param_float](#classmavsdk_1_1_param_1a3258e5ceec1bfaa2b0228786f197f4d3) (std::string name)const | Get a float parameter.
+std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), float > | [get_param_float](#classmavsdk_1_1_param_1ae3c8e1f497596e7387af593d24b5bc91) (std::string name, const [OperationOptions](structmavsdk_1_1_operation_options.md) & options)const | Get a float parameter with an overall operation timeout.
 [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df) | [set_param_float](#classmavsdk_1_1_param_1a58a2f14fbcda2bf73815dbc2a31528bf) (std::string name, float value)const | Set a float parameter.
 std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), std::string > | [get_param_custom](#classmavsdk_1_1_param_1a0fdcf7aee3324843ddd1638aa409a962) (std::string name)const | Get a custom parameter.
 [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df) | [set_param_custom](#classmavsdk_1_1_param_1abb9cc4e4e14d33a93b23295f836de39e) (std::string name, std::string value)const | Set a custom parameter.
@@ -185,6 +187,25 @@ This function is blocking.
 
 &emsp;std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), int32_t > - Result of request.
 
+### get_param_int() {#classmavsdk_1_1_param_1ad7fb26697b03f8aedad52bf043f56664}
+```cpp
+std::pair< Result, int32_t > mavsdk::Param::get_param_int(std::string name, const OperationOptions &options) const
+```
+
+
+Get an int parameter with an overall operation timeout.
+
+The timeout includes queueing and all internal retries.
+
+**Parameters**
+
+* std::string **name** - 
+* const [OperationOptions](structmavsdk_1_1_operation_options.md)& **options** - 
+
+**Returns**
+
+&emsp;std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), int32_t > - 
+
 ### set_param_int() {#classmavsdk_1_1_param_1af8124bae8b4649605a51fe2943ae8414}
 ```cpp
 Result mavsdk::Param::set_param_int(std::string name, int32_t value) const
@@ -227,6 +248,25 @@ This function is blocking.
 **Returns**
 
 &emsp;std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), float > - Result of request.
+
+### get_param_float() {#classmavsdk_1_1_param_1ae3c8e1f497596e7387af593d24b5bc91}
+```cpp
+std::pair< Result, float > mavsdk::Param::get_param_float(std::string name, const OperationOptions &options) const
+```
+
+
+Get a float parameter with an overall operation timeout.
+
+The timeout includes queueing and all internal retries.
+
+**Parameters**
+
+* std::string **name** - 
+* const [OperationOptions](structmavsdk_1_1_operation_options.md)& **options** - 
+
+**Returns**
+
+&emsp;std::pair< [Result](classmavsdk_1_1_param.md#classmavsdk_1_1_param_1afde69c8b60c41e2f21db148d211881df), float > - 
 
 ### set_param_float() {#classmavsdk_1_1_param_1a58a2f14fbcda2bf73815dbc2a31528bf}
 ```cpp
