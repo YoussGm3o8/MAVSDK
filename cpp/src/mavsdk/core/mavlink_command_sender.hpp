@@ -3,8 +3,11 @@
 #include "timeout_handler.hpp"
 #include "mavlink_include.hpp"
 #include "mavsdk_time.hpp"
+#include "operation_options.hpp"
+#include "operation_timeout.hpp"
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <deque>
@@ -79,6 +82,14 @@ public:
 
     Result send_command(const CommandInt& command, unsigned retries = DEFAULT_RETRIES);
     Result send_command(const CommandLong& command, unsigned retries = DEFAULT_RETRIES);
+    Result send_command(
+        const CommandInt& command,
+        const OperationOptions& options,
+        unsigned retries = DEFAULT_RETRIES);
+    Result send_command(
+        const CommandLong& command,
+        const OperationOptions& options,
+        unsigned retries = DEFAULT_RETRIES);
 
     void queue_command_async(
         const CommandInt& command,
@@ -87,6 +98,16 @@ public:
     void queue_command_async(
         const CommandLong& command,
         const CommandResultCallback& callback,
+        unsigned retries = DEFAULT_RETRIES);
+    void queue_command_async(
+        const CommandInt& command,
+        const CommandResultCallback& callback,
+        const OperationOptions& options,
+        unsigned retries = DEFAULT_RETRIES);
+    void queue_command_async(
+        const CommandLong& command,
+        const CommandResultCallback& callback,
+        const OperationOptions& options,
         unsigned retries = DEFAULT_RETRIES);
 
     void do_work();
@@ -125,7 +146,9 @@ private:
         CommandResultCallback callback{};
         SteadyTimePoint time_started{};
         TimeoutHandler::Cookie timeout_cookie{};
+        TimeoutHandler::Cookie queue_timeout_cookie{};
         double timeout_s{0.5};
+        OperationTimeout operation_timeout{};
         int retries_to_do;
         bool already_sent{false};
     };
@@ -158,6 +181,21 @@ private:
 
     void receive_command_ack(const mavlink_message_t& message);
     void receive_timeout(const CommandIdentification& identification);
+    void receive_queued_timeout(const std::shared_ptr<Work>& work);
+    void arm_queued_timeout(const std::shared_ptr<Work>& work);
+    void queue_command_async_impl(
+        const CommandInt& command,
+        const CommandResultCallback& callback,
+        unsigned retries,
+        std::optional<std::chrono::milliseconds> timeout);
+    void queue_command_async_impl(
+        const CommandLong& command,
+        const CommandResultCallback& callback,
+        unsigned retries,
+        std::optional<std::chrono::milliseconds> timeout);
+
+    [[nodiscard]] bool operation_expired(const Work& work) const;
+    [[nodiscard]] double attempt_timeout_s(const Work& work) const;
 
     void call_callback(const CommandResultCallback& callback, Result result, float progress) const;
 

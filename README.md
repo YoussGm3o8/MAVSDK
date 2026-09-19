@@ -1,5 +1,11 @@
 <img alt="MAVSDK" src="docs/assets/site/sdk_logo_full.png" width="400">
 
+> [!NOTE]
+> The `nomad/ardupilot` branch is a standalone compatibility fork maintained at
+> `YoussGm3o8/MAVSDK`. It carries reproducible-build changes and generic
+> MAVSDK-to-ArduPilot fixes only. It does not contain NOMAD application or
+> safety policy. See the [fork maintenance and compatibility guide](docs/en/cpp/guide/ardupilot_compatibility.md).
+
 [![Linux](https://github.com/mavlink/MAVSDK/actions/workflows/linux.yml/badge.svg?branch=main)](https://github.com/mavlink/MAVSDK/actions/workflows/linux.yml)
 [![macOS](https://github.com/mavlink/MAVSDK/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/mavlink/MAVSDK/actions/workflows/macos.yml)
 [![Windows](https://github.com/mavlink/MAVSDK/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/mavlink/MAVSDK/actions/workflows/windows.yml)

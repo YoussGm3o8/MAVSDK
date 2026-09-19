@@ -310,9 +310,17 @@ void UdpConnection::do_receive()
 
                 // operation_aborted happens when the socket is closed (stop()), which is normal.
                 if (ec != asio::error::operation_aborted) {
-                    LogErr("Error from async_receive_from: {}", ec.message());
+                    // UDP is connectionless, but Windows can report an ICMP port-unreachable
+                    // response as connection_refused when a peer is temporarily offline. Keep
+                    // the receive loop alive so a later peer restart can be discovered again.
+                    if (_socket.is_open()) {
+                        LogWarn("Error from async_receive_from: {}; retrying", ec.message());
+                        do_receive();
+                    } else {
+                        LogErr("Error from async_receive_from: {}", ec.message());
+                    }
                 }
-                // Do NOT re-post — the connection is being torn down.
+                // Do not re-post after operation_aborted: the connection is being torn down.
                 return;
             }
 

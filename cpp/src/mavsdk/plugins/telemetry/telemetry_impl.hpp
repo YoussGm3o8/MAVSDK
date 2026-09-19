@@ -205,6 +205,8 @@ public:
     TelemetryImpl& operator=(const TelemetryImpl&) = delete;
 
 private:
+    void initialize_ardupilot_message_rates();
+
     void set_position_velocity_ned(Telemetry::PositionVelocityNed position_velocity_ned);
     void set_position(Telemetry::Position position);
     void set_home_position(Telemetry::HomePosition home_position);

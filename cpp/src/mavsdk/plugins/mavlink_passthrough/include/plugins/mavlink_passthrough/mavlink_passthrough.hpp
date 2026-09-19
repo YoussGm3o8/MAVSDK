@@ -11,6 +11,7 @@
 #include "handle.hpp"
 #include "deprecated.hpp"
 #include "mavlink_address.hpp"
+#include "operation_options.hpp"
 
 namespace mavsdk {
 
@@ -161,6 +162,15 @@ public:
      */
     DEPRECATED Result send_command_long(const CommandLong& command);
 
+
+    /**
+     * @brief Send a MAVLink command_long with an overall operation timeout.
+     *
+     * The timeout includes queueing and all internal retries.
+     */
+    DEPRECATED Result send_command_long(
+        const CommandLong& command, const OperationOptions& options);
+
     /**
      * @brief Send a MAVLink command_long.
      *
@@ -169,6 +179,15 @@ public:
      * @return result of the request.
      */
     DEPRECATED Result send_command_int(const CommandInt& command);
+
+
+    /**
+     * @brief Send a MAVLink command_int with an overall operation timeout.
+     *
+     * The timeout includes queueing and all internal retries.
+     */
+    DEPRECATED Result send_command_int(
+        const CommandInt& command, const OperationOptions& options);
 
     /**
      * @brief Create a command_ack.

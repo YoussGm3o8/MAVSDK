@@ -251,6 +251,7 @@
 
 
     * [Troubleshooting](cpp/troubleshooting.md)
+    * [ArduPilot compatibility fork](cpp/guide/ardupilot_compatibility.md)
     * [Contributing](cpp/contributing/index.md)
         * [Autogeneration](cpp/contributing/autogen.md)
         * [Writing Plugins](cpp/contributing/plugins.md)

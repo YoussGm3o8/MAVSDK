@@ -27,6 +27,10 @@ public:
 
     MavlinkPassthrough::Result send_command_long(const MavlinkPassthrough::CommandLong& command);
     MavlinkPassthrough::Result send_command_int(const MavlinkPassthrough::CommandInt& command);
+    MavlinkPassthrough::Result send_command_long(
+        const MavlinkPassthrough::CommandLong& command, const OperationOptions& options);
+    MavlinkPassthrough::Result send_command_int(
+        const MavlinkPassthrough::CommandInt& command, const OperationOptions& options);
     mavlink_message_t make_command_ack_message(
         const uint32_t target_sysid,
         const uint8_t target_compid,
