@@ -40,6 +40,7 @@ Namespace for all mavsdk types.
 * [mavsdk::MissionRawServer](classmavsdk_1_1_mission_raw_server.md)
 * [mavsdk::Mocap](classmavsdk_1_1_mocap.md)
 * [mavsdk::Offboard](classmavsdk_1_1_offboard.md)
+* [mavsdk::OperationOptions](structmavsdk_1_1_operation_options.md)
 * [mavsdk::overloaded](structmavsdk_1_1overloaded.md)
 * [mavsdk::Param](classmavsdk_1_1_param.md)
 * [mavsdk::ParamServer](classmavsdk_1_1_param_server.md)
