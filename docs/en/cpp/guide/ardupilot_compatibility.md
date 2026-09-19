@@ -41,7 +41,7 @@ receive loop retries while its socket remains open.
 
 | Input | Pin |
 |---|---|
-| Upstream MAVSDK base | `34b417d45c2c33ce0414bc1bc61b54010d055224` |
+| Upstream MAVSDK base | `d7043d3cafe8cd6250565fd211b966d8b455d561` |
 | ArduCopter release | `Copter-4.7.1` |
 | ArduPilot commit | `dbe792162d06cab66c3475fd5556bf7a120f119e` |
 | SITL Docker build context | `radarku/ardupilot-sitl-docker@eff32c1f98152ac3d1dc09a1e475733b73ce569f` |
@@ -71,8 +71,7 @@ docker run --detach --rm --network host --name mavsdk-ardupilot-sitl \
   --sim-address=127.0.0.1 -I0 \
   --home 42.3898,-71.1476,14.0,270.0
 MAVSDK_ARDUPILOT_URL=udpin://0.0.0.0:14540 \
-  build/src/system_tests/ardupilot_tests_runner \
-  --gtest_filter='ArduPilotCompatibility.*:ActionTransport.*:GeofenceTransport.*'
+  build/src/system_tests/ardupilot_tests_runner
 docker rm --force mavsdk-ardupilot-sitl
 ```
 
@@ -88,13 +87,18 @@ docker run --detach --rm --publish 5762:5762/tcp --name mavsdk-ardupilot-sitl `
   --serial0 udpclient:127.0.0.1:14540 --sim-address=127.0.0.1 -I0 `
   --home 42.3898,-71.1476,14.0,270.0
 $env:MAVSDK_ARDUPILOT_URL = 'tcpout://127.0.0.1:5762'
-& .\build\src\system_tests\Debug\ardupilot_tests_runner.exe `
-  --gtest_filter='ArduPilotCompatibility.*:ActionTransport.*:GeofenceTransport.*'
+& .\build\src\system_tests\Debug\ardupilot_tests_runner.exe
 docker stop mavsdk-ardupilot-sitl
 ```
 
 The Windows route passed all 19 tests on 2026-09-18. The dedicated Linux CI
 workflow retains direct UDP with no other GCS connected.
+
+On 2026-09-19, a fresh Windows TCP session against the same pinned image passed
+all 33 tests after the upstream rebase and fault-path additions. This includes
+the five one-shot wire tests, four deadline wire tests, four vehicle fence
+fault/round-trip tests, and the one-shot producer-stall flight test. Hosted
+platform qualification remains a separate requirement for each consumer pin.
 
 The tests skip when `MAVSDK_ARDUPILOT_URL` is absent, so the ordinary hermetic
 system-test job does not accidentally depend on a simulator. The dedicated
@@ -133,9 +137,17 @@ requests. `Unknown` means no such evidence is claimed.
 | Operation-scoped command/parameter deadline | 4.7.1 | `OperationTimeout` unit + SITL queued/silent tests | Tested |
 | Guided body velocity and stop | 4.7.1 | `ExecutesGuidedBodyVelocityAndStops` | Tested |
 | Invalid geofence input rejection | 4.7.1 | `RejectsInvalidFencePolygon` | Tested |
-| Vehicle-side rejected fence upload | 4.7.1 | — | Unknown |
+| Vehicle-side rejected fence upload and recovery | 4.7.1 | `ArduPilotFenceFaults.ReportsVehicleRejectedUploadAndRecovers` | Tested |
+| Exclusion-fence polygon round trip | 4.7.1 | `ArduPilotFenceFaults.RoundTripsExclusionPolygon` | Tested |
 | Geofence download timeout for a silent peer | synthetic autopilot | `GeofenceTransport.TimesOutWhenAutopilotIgnoresFenceDownload` | Tested |
-| Geofence timeout against ArduCopter | 4.7.1 | — | Unknown |
+| Fence upload response loss, timeout and recovery | 4.7.1 | `ArduPilotFenceFaults.UploadTimesOutDuringResponseLossAndRecovers` | Tested |
+| Fence download response loss, timeout and recovery | 4.7.1 | `ArduPilotFenceFaults.DownloadTimesOutDuringResponseLossAndRecovers` | Tested |
+| One-shot velocity expires with a stalled producer | 4.7.1 | `OneShotVelocityExpiresWhenProducerStalls` | Tested |
+| One-shot frame, invalid input, zero, shutdown, lost connection and resend exclusion | synthetic autopilot | `OffboardOneShot.*` (five tests) | Tested |
+| Command retry after controlled loss | synthetic autopilot | `OperationDeadlineWire.RetriesDroppedCommandThenSucceedsWithinBudget` | Tested |
+| Parameter retry after controlled loss | synthetic autopilot | `OperationDeadlineWire.RetriesDroppedParameterReadThenReturnsValue` | Tested |
+| Repeated progress cannot extend a deadline | synthetic autopilot | `OperationDeadlineWire.ProgressAcknowledgementsCannotExtendDeadline` | Tested |
+| Concurrent in-flight commands keep independent deadlines | synthetic autopilot | `OperationDeadlineWire.ConcurrentCommandsKeepIndependentDeadlines` | Tested |
 | Calibration | — | — | Unknown |
 | Mission high-level API | — | — | Unknown |
 
@@ -161,13 +173,38 @@ pinned ArduPilot version that requires it is identified and tested.
   Consumers whose existing contract stores yaw rate in radians per second must
   convert it because `VelocityBodyYawspeed::yawspeed_deg_s` is degrees per
   second. The pinned-SITL test now covers Guided forward, right, down, yaw-rate,
-  repeated updates, zero velocity, and stop behavior. `Offboard` repeats the last
-  setpoint automatically; applications that require each setpoint to expire
-  unless their own control loop sends a fresh one must account for that semantic
-  difference before replacing a one-shot transport.
+  repeated updates, zero velocity, and stop behavior.
+- `Offboard::set_velocity_body_once` uses the same encoding without storing a
+  setpoint or starting a resend timer. It does not change flight mode. It rejects
+  nonfinite values, a missing transport connection, and mixing with automatic
+  Offboard resends. Success means queued for transport, not vehicle acceptance.
+  The application still owns freshness, watchdogs, cancellation, final zeros,
+  authorization and authoritative outcome checks. The Copter regression proves
+  horizontal movement followed by expiry under its unchanged `GUID_TIMEOUT`
+  when the producer stops sending. The wire tests independently prove no resend
+  after a stalled producer, a zero followed by destruction, or a removed link.
 - `OperationOptions::timeout` bounds the complete command or parameter read,
   including time spent queued and all internal retries. Existing overloads retain
   the SDK-wide per-attempt timeout for backward compatibility.
+
+The fence rejection test uploads a valid MAVLink plan larger than the pinned
+vehicle's fence storage and independently observes `MAV_MISSION_NO_SPACE`.
+Timeout tests drop actual vehicle responses, count those dropped replies, bound
+completion, restore the response path, and verify a fresh upload/download.
+They do not replace application fence policy or assert flight containment.
+
+## Hosted build compatibility
+
+The fork retains Debian 11 packaging despite upstream removing that job.
+Bullseye's live security index references OpenSSL and ICU packages that return
+404. The job uses the dated `20260830T000000Z` Debian and Debian Security
+snapshots, with signature verification retained and expiry checking disabled
+only for those dated sources. Clean-container package installation is tested;
+this frozen build environment does not claim continuing Debian security support.
+
+All platforms, including iOS device and simulator builds, apply the same MAVLink
+patch once. It uses the pinned nested generator without a build-time pip install.
+The removed iOS patch attempted to remove the same pip code a second time.
 
 ## Upstream references
 
