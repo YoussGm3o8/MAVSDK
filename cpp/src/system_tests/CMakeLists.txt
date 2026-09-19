@@ -87,6 +87,7 @@ add_executable(ardupilot_tests_runner EXCLUDE_FROM_ALL
     ardupilot_compatibility.cpp
     ardupilot_action_wire.cpp
     ardupilot_geofence_timeout.cpp
+    ardupilot_geofence_faults.cpp
 )
 
 target_compile_definitions(ardupilot_tests_runner PRIVATE MAVSDK_ENABLE_MAVLINK_C_API)
