@@ -41,7 +41,7 @@ jobs:
           -DBUILD_MAVSDK_SERVER=OFF
           -DBUILD_TESTING=ON
           -DBUILD_WITHOUT_CURL=ON
-          "-DENABLED_PLUGINS=action;geofence;offboard;param;telemetry"
+          "-DENABLED_PLUGINS=action;geofence;offboard;param;param_server;telemetry"
 
       - name: Build MAVSDK ArduPilot tests
         run: cmake --build build --target ardupilot_tests_runner --parallel 2
@@ -78,9 +78,7 @@ jobs:
           exit 1
 
       - name: Run ArduPilot compatibility suite
-        run: >-
-          build/src/system_tests/ardupilot_tests_runner
-          --gtest_filter=ArduPilotCompatibility.*:ActionTransport.*:GeofenceTransport.*
+        run: build/src/system_tests/ardupilot_tests_runner
 
       - name: SITL logs on failure
         if: failure()
