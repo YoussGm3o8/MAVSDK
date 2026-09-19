@@ -30,7 +30,8 @@ std::shared_ptr<System> wait_for_ground_station(Mavsdk& autopilot, uint8_t groun
     return nullptr;
 }
 
-void acknowledge_command(MavlinkPassthrough& passthrough, const mavlink_message_t& request, uint16_t command)
+void acknowledge_command(
+    MavlinkPassthrough& passthrough, const mavlink_message_t& request, uint16_t command)
 {
     passthrough.queue_message([request, command](MavlinkAddress address, uint8_t channel) {
         mavlink_message_t acknowledgment{};
