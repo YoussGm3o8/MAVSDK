@@ -656,7 +656,38 @@ Offboard::Result OffboardImpl::send_acceleration_ned()
                Offboard::Result::ConnectionError;
 }
 
+Offboard::Result
+OffboardImpl::set_velocity_body_once(Offboard::VelocityBodyYawspeed velocity_body_yawspeed)
+{
+    if (_system_impl->get_connections().empty()) {
+        return Offboard::Result::ConnectionError;
+    }
+    if (!std::isfinite(velocity_body_yawspeed.forward_m_s) ||
+        !std::isfinite(velocity_body_yawspeed.right_m_s) ||
+        !std::isfinite(velocity_body_yawspeed.down_m_s) ||
+        !std::isfinite(velocity_body_yawspeed.yawspeed_deg_s)) {
+        return Offboard::Result::Failed;
+    }
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (_mode != Mode::NotActive) {
+            return Offboard::Result::Busy;
+        }
+    }
+    return send_velocity_body(velocity_body_yawspeed);
+}
+
 Offboard::Result OffboardImpl::send_velocity_body()
+{
+    const auto velocity = [this]() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _velocity_body_yawspeed;
+    }();
+    return send_velocity_body(velocity);
+}
+
+Offboard::Result
+OffboardImpl::send_velocity_body(Offboard::VelocityBodyYawspeed velocity_body_yawspeed)
 {
     const static uint16_t IGNORE_X = (1 << 0);
     const static uint16_t IGNORE_Y = (1 << 1);
@@ -665,11 +696,6 @@ Offboard::Result OffboardImpl::send_velocity_body()
     const static uint16_t IGNORE_AY = (1 << 7);
     const static uint16_t IGNORE_AZ = (1 << 8);
     const static uint16_t IGNORE_YAW = (1 << 10);
-
-    const auto velocity_body_yawspeed = [this]() {
-        std::lock_guard<std::mutex> lock(_mutex);
-        return _velocity_body_yawspeed;
-    }();
 
     return _system_impl->queue_message([&](MavlinkAddress mavlink_address, uint8_t channel) {
         mavlink_message_t message;

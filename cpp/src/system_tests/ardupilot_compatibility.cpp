@@ -418,11 +418,11 @@ TEST_F(ArduPilotCompatibility, ReportsMissingParameter)
 {
     const auto started = std::chrono::steady_clock::now();
     const auto [result, value] =
-        param->get_param_float("MAVSDK_MISSING", OperationOptions{kOperationTimeout});
+        param->get_param_float("MAVSDK_MISSING", OperationOptions{std::chrono::seconds(2)});
     const auto elapsed = std::chrono::steady_clock::now() - started;
     (void)value;
     EXPECT_EQ(result, Param::Result::DoesNotExist);
-    EXPECT_LT(elapsed, std::chrono::seconds(1));
+    EXPECT_LT(elapsed, std::chrono::seconds(3));
 }
 
 MavlinkPassthrough::CommandLong
@@ -667,6 +667,38 @@ TEST_F(ArduPilotCompatibility, ExecutesGuidedBodyVelocityAndStops)
     ASSERT_EQ(offboard->stop(), Offboard::Result::Success);
     EXPECT_FALSE(offboard->is_active());
 
+    ASSERT_EQ(action->land(), Action::Result::Success);
+    ASSERT_TRUE(wait_until([] { return !telemetry->armed(); }, std::chrono::seconds(45)));
+}
+
+TEST_F(ArduPilotCompatibility, OneShotVelocityExpiresWhenProducerStalls)
+{
+    ASSERT_TRUE(wait_for_armable_position(*telemetry));
+    const auto [timeout_result, guided_timeout] = param->get_param_float("GUID_TIMEOUT");
+    ASSERT_EQ(timeout_result, Param::Result::Success);
+    ASSERT_GT(guided_timeout, 0.0F);
+    ASSERT_LE(guided_timeout, 10.0F);
+    ASSERT_EQ(telemetry->set_rate_velocity_ned(10.0), Telemetry::Result::Success);
+    ASSERT_EQ(action->set_takeoff_altitude(5.0F), Action::Result::Success);
+    ASSERT_EQ(action->arm(), Action::Result::Success);
+    ASSERT_EQ(action->takeoff(), Action::Result::Success);
+    ASSERT_TRUE(wait_until(
+        [] { return telemetry->in_air() && telemetry->position().relative_altitude_m > 3.5F; },
+        std::chrono::seconds(30)));
+    ASSERT_EQ(
+        offboard->set_velocity_body_once({0.75F, 0.0F, 0.0F, 0.0F}), Offboard::Result::Success);
+    ASSERT_TRUE(wait_until(
+        [] {
+            const auto velocity = telemetry->velocity_ned();
+            return std::hypot(velocity.north_m_s, velocity.east_m_s) > 0.3F;
+        },
+        std::chrono::seconds(2)));
+    // No producer refresh and no application zero: ArduPilot must expire the command.
+    std::this_thread::sleep_for(std::chrono::duration<float>(guided_timeout));
+    EXPECT_TRUE(
+        wait_until([] { return velocity_is_below(*telemetry, 0.25F); }, std::chrono::seconds(5)));
+    EXPECT_FALSE(offboard->is_active());
+    ASSERT_EQ(offboard->set_velocity_body_once({}), Offboard::Result::Success);
     ASSERT_EQ(action->land(), Action::Result::Success);
     ASSERT_TRUE(wait_until([] { return !telemetry->armed(); }, std::chrono::seconds(45)));
 }

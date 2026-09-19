@@ -194,10 +194,47 @@ Param::get_param_float(std::string name, const OperationOptions& options) const
         insert_after(header, marker, addition)
 
 
+def add_offboard_api() -> None:
+    """Preserve the one-shot body velocity API through regeneration."""
+    source = REPO_ROOT / "cpp/src/mavsdk/plugins/offboard/offboard.cpp"
+    insert_before(
+        source,
+        "Offboard::Result Offboard::set_velocity_ned(",
+        """Offboard::Result Offboard::set_velocity_body_once(VelocityBodyYawspeed velocity_body_yawspeed) const
+{
+    return _impl->set_velocity_body_once(velocity_body_yawspeed);
+}
+
+""",
+    )
+    header = REPO_ROOT / "cpp/src/mavsdk/plugins/offboard/include/plugins/offboard/offboard.hpp"
+    insert_after(
+        header,
+        "    Result set_velocity_body(VelocityBodyYawspeed velocity_body_yawspeed) const;\n",
+        """
+
+    /**
+     * @brief Send one body-frame velocity setpoint without storing or repeating it.
+     *
+     * Does not change flight mode or enable Offboard. The caller owns refresh,
+     * stop commands and verification. Success means the message was queued,
+     * not vehicle acceptance. Returns Busy while automatic setpoints
+     * are enabled, Failed for nonfinite values, or ConnectionError on send failure.
+     * Yaw rate is in degrees per second, as with set_velocity_body.
+     *
+     * @param velocity_body_yawspeed Body velocity and yaw rate to send once.
+     * @return Result of the transport request.
+     */
+    Result set_velocity_body_once(VelocityBodyYawspeed velocity_body_yawspeed) const;
+""",
+    )
+
+
 def main() -> None:
     """Apply all generated compatibility additions."""
     add_action_api()
     add_param_api()
+    add_offboard_api()
 
 
 if __name__ == "__main__":
