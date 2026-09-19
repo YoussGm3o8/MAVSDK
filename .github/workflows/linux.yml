@@ -538,6 +538,9 @@ jobs:
             os_version: "24.04"
           - os_type: debian
             os_name: Debian
+            os_version: "11"
+          - os_type: debian
+            os_name: Debian
             os_version: "12"
           - os_type: debian
             os_name: Debian
@@ -569,6 +572,14 @@ jobs:
         run: |
           echo "superbuild=-DSUPERBUILD=OFF" >> $GITHUB_ENV
           echo "cmake_prefix_path=-DCMAKE_PREFIX_PATH=$(pwd)/build/release/third_party/install" >> $GITHUB_ENV
+      - name: Use a reproducible Bullseye package snapshot
+        if: matrix.os_type == 'debian' && matrix.os_version == '11'
+        run: |
+          printf '%s\n' \
+            'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260830T000000Z bullseye main' \
+            'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260830T000000Z bullseye-security main' \
+            | sudo tee /etc/apt/sources.list
+          sudo apt-get update --error-on=any
       - name: install asio (non-superbuild fallback)
         if: steps.cache.outputs.cache-hit == 'true'
         run: sudo apt-get update && sudo apt-get install -y libasio-dev
