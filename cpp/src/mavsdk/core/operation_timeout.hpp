@@ -39,7 +39,11 @@ public:
 
         const auto remaining = *remaining_s(now);
         const auto attempts_left = static_cast<double>(retries_to_do + 1U);
-        return (std::max)(0.0, remaining / attempts_left);
+        const std::chrono::duration<double> interval{(std::max)(0.0, remaining / attempts_left)};
+        // The timer stores milliseconds; rounding down can retry an acknowledged command just
+        // before its deadline.
+        return std::chrono::duration<double>(std::chrono::ceil<std::chrono::milliseconds>(interval))
+            .count();
     }
 
 private:

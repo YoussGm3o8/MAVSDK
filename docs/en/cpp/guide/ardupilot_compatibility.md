@@ -186,6 +186,9 @@ pinned ArduPilot version that requires it is identified and tested.
 - `OperationOptions::timeout` bounds the complete command or parameter read,
   including time spent queued and all internal retries. Existing overloads retain
   the SDK-wide per-attempt timeout for backward compatibility.
+  Operation intervals round upward to the timer's millisecond precision so a
+  progress ACK cannot produce a spurious retry immediately before the deadline.
+  `OperationTimeout.FinalAttemptNeverRoundsBeforeTheDeadline` covers that boundary.
 
 The fence rejection test uploads a valid MAVLink plan larger than the pinned
 vehicle's fence storage and independently observes `MAV_MISSION_NO_SPACE`.
@@ -207,6 +210,8 @@ patch once. It uses the pinned nested generator without a build-time pip install
 The removed iOS patch attempted to remove the same pip code a second time.
 
 ## Upstream references
+
+- [Pinned generator and shared platform patch contribution](https://github.com/mavlink/MAVSDK/pull/3102)
 
 - [ArduPilot support tracker](https://github.com/mavlink/MAVSDK/issues/1568)
 - [Original ArduPilot architecture discussion](https://github.com/mavlink/MAVSDK/issues/728)

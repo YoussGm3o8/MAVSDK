@@ -34,4 +34,15 @@ TEST(OperationTimeout, IncludesQueueTimeAndExpiresAtDeadline)
         timeout.attempt_timeout_s(start + std::chrono::milliseconds(120), 3, 0.5), 0.0);
 }
 
+TEST(OperationTimeout, FinalAttemptNeverRoundsBeforeTheDeadline)
+{
+    const auto start = SteadyTimePoint{};
+    const OperationTimeout timeout{std::chrono::milliseconds(400), start};
+    const auto now = start + std::chrono::microseconds(123456);
+
+    EXPECT_DOUBLE_EQ(timeout.attempt_timeout_s(now, 0, 3.0), 0.277);
+    EXPECT_DOUBLE_EQ(
+        timeout.attempt_timeout_s(start + std::chrono::microseconds(399900), 0, 3.0), 0.001);
+}
+
 } // namespace mavsdk

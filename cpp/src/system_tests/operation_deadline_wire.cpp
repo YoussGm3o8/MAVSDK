@@ -94,6 +94,15 @@ TEST_F(OperationDeadlineWire, RetriesDroppedCommandThenSucceedsWithinBudget)
 
 TEST_F(OperationDeadlineWire, ProgressAcknowledgementsCannotExtendDeadline)
 {
+    auto received_progress = std::make_shared<std::atomic<unsigned>>(0);
+    const auto ack_handle = command->subscribe_message(
+        MAVLINK_MSG_ID_COMMAND_ACK, [received_progress](const mavlink_message_t& message) {
+            mavlink_command_ack_t ack{};
+            mavlink_msg_command_ack_decode(&message, &ack);
+            if (ack.command == test_command && ack.result == MAV_RESULT_IN_PROGRESS) {
+                ++*received_progress;
+            }
+        });
     auto attempts = std::make_shared<std::atomic<unsigned>>(0);
     const auto handle = wire->subscribe_message(
         MAVLINK_MSG_ID_COMMAND_LONG, [attempts](const mavlink_message_t& message) {
@@ -121,10 +130,12 @@ TEST_F(OperationDeadlineWire, ProgressAcknowledgementsCannotExtendDeadline)
     const auto elapsed = std::chrono::steady_clock::now() - start;
     progress.request_stop();
     progress.join();
+    command->unsubscribe_message(MAVLINK_MSG_ID_COMMAND_ACK, ack_handle);
     wire->unsubscribe_message(MAVLINK_MSG_ID_COMMAND_LONG, handle);
     EXPECT_EQ(completion, std::future_status::ready);
     EXPECT_EQ(operation.get(), MavlinkPassthrough::Result::CommandTimeout);
     EXPECT_GT(progress_count->load(), 5U);
+    EXPECT_GT(received_progress->load(), 5U);
     EXPECT_EQ(attempts->load(), 1U);
     EXPECT_GE(elapsed, 350ms);
     EXPECT_LT(elapsed, 800ms);
