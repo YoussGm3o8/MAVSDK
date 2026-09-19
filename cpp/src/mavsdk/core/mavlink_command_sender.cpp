@@ -2,6 +2,7 @@
 #include "mavlink_address.hpp"
 #include "system_impl.hpp"
 #include "unused.hpp"
+#include <algorithm>
 #include <cmath>
 #include <future>
 #include <memory>
@@ -35,6 +36,7 @@ MavlinkCommandSender::~MavlinkCommandSender()
 
     for (const auto& work : _work_queue) {
         _system_impl.unregister_timeout_handler_blocking(work->timeout_cookie);
+        _system_impl.unregister_timeout_handler_blocking(work->queue_timeout_cookie);
     }
 }
 
@@ -85,8 +87,78 @@ MavlinkCommandSender::Result MavlinkCommandSender::send_command(
     return res.get();
 }
 
+MavlinkCommandSender::Result MavlinkCommandSender::send_command(
+    const MavlinkCommandSender::CommandInt& command,
+    const OperationOptions& options,
+    unsigned retries)
+{
+    if (options.timeout <= std::chrono::milliseconds::zero()) {
+        return Result::Timeout;
+    }
+
+    auto prom = std::make_shared<std::promise<Result>>();
+    auto res = prom->get_future();
+    queue_command_async(
+        command,
+        [prom](Result result, float progress) {
+            UNUSED(progress);
+            if (result != Result::InProgress) {
+                prom->set_value(result);
+            }
+        },
+        options,
+        retries);
+    return res.get();
+}
+
+MavlinkCommandSender::Result MavlinkCommandSender::send_command(
+    const MavlinkCommandSender::CommandLong& command,
+    const OperationOptions& options,
+    unsigned retries)
+{
+    if (options.timeout <= std::chrono::milliseconds::zero()) {
+        return Result::Timeout;
+    }
+
+    auto prom = std::make_shared<std::promise<Result>>();
+    auto res = prom->get_future();
+    queue_command_async(
+        command,
+        [prom](Result result, float progress) {
+            UNUSED(progress);
+            if (result != Result::InProgress) {
+                prom->set_value(result);
+            }
+        },
+        options,
+        retries);
+    return res.get();
+}
+
 void MavlinkCommandSender::queue_command_async(
     const CommandInt& command, const CommandResultCallback& callback, unsigned retries)
+{
+    queue_command_async_impl(command, callback, retries, std::nullopt);
+}
+
+void MavlinkCommandSender::queue_command_async(
+    const CommandInt& command,
+    const CommandResultCallback& callback,
+    const OperationOptions& options,
+    unsigned retries)
+{
+    if (options.timeout <= std::chrono::milliseconds::zero()) {
+        call_callback(callback, Result::Timeout, NAN);
+        return;
+    }
+    queue_command_async_impl(command, callback, retries, options.timeout);
+}
+
+void MavlinkCommandSender::queue_command_async_impl(
+    const CommandInt& command,
+    const CommandResultCallback& callback,
+    unsigned retries,
+    std::optional<std::chrono::milliseconds> timeout)
 {
     if (_command_debugging) {
         LogDebug(
@@ -102,6 +174,10 @@ void MavlinkCommandSender::queue_command_async(
     new_work->identification = identification_from_command(command);
     new_work->callback = callback;
     new_work->retries_to_do = retries;
+    if (timeout) {
+        new_work->operation_timeout =
+            OperationTimeout{*timeout, _system_impl.get_time().steady_time()};
+    }
     asio::post(_io_context, [this, new_work]() {
         for (const auto& work : _work_queue) {
             if (work->identification == new_work->identification && new_work->callback == nullptr) {
@@ -114,6 +190,7 @@ void MavlinkCommandSender::queue_command_async(
             }
         }
         _work_queue.push_back(new_work);
+        arm_queued_timeout(new_work);
         // Unconditional, unlike the other work queues: do_work() here walks the whole queue
         // and sends everything not sent yet, so a command queued behind another one still
         // needs it to run.
@@ -123,6 +200,28 @@ void MavlinkCommandSender::queue_command_async(
 
 void MavlinkCommandSender::queue_command_async(
     const CommandLong& command, const CommandResultCallback& callback, unsigned retries)
+{
+    queue_command_async_impl(command, callback, retries, std::nullopt);
+}
+
+void MavlinkCommandSender::queue_command_async(
+    const CommandLong& command,
+    const CommandResultCallback& callback,
+    const OperationOptions& options,
+    unsigned retries)
+{
+    if (options.timeout <= std::chrono::milliseconds::zero()) {
+        call_callback(callback, Result::Timeout, NAN);
+        return;
+    }
+    queue_command_async_impl(command, callback, retries, options.timeout);
+}
+
+void MavlinkCommandSender::queue_command_async_impl(
+    const CommandLong& command,
+    const CommandResultCallback& callback,
+    unsigned retries,
+    std::optional<std::chrono::milliseconds> timeout)
 {
     if (_command_debugging) {
         LogDebug(
@@ -139,6 +238,10 @@ void MavlinkCommandSender::queue_command_async(
     new_work->callback = callback;
     new_work->time_started = _system_impl.get_time().steady_time();
     new_work->retries_to_do = retries;
+    if (timeout) {
+        new_work->operation_timeout =
+            OperationTimeout{*timeout, _system_impl.get_time().steady_time()};
+    }
     asio::post(_io_context, [this, new_work]() {
         for (const auto& work : _work_queue) {
             if (work->identification == new_work->identification && new_work->callback == nullptr) {
@@ -151,6 +254,7 @@ void MavlinkCommandSender::queue_command_async(
             }
         }
         _work_queue.push_back(new_work);
+        arm_queued_timeout(new_work);
         // Unconditional, unlike the other work queues: do_work() here walks the whole queue
         // and sends everything not sent yet, so a command queued behind another one still
         // needs it to run.
@@ -187,6 +291,10 @@ void MavlinkCommandSender::receive_command_ack(const mavlink_message_t& message)
         if (!work) {
             LogErr("No work available! (should not happen #1)");
             return;
+        }
+
+        if (!work->already_sent) {
+            continue;
         }
 
         if (work->identification.command != command_ack.command ||
@@ -282,7 +390,8 @@ void MavlinkCommandSender::receive_command_ack(const mavlink_message_t& message)
                     [this, identification = work->identification] {
                         receive_timeout(identification);
                     },
-                    3.0);
+                    work->operation_timeout.attempt_timeout_s(
+                        _system_impl.get_time().steady_time(), 0, 3.0));
 
                 temp_result = {
                     Result::InProgress, static_cast<float>(command_ack.progress) / 100.0f};
@@ -350,7 +459,7 @@ void MavlinkCommandSender::receive_timeout(const CommandIdentification& identifi
 
         found_command = true;
 
-        if (work->retries_to_do > 0) {
+        if (work->retries_to_do > 0 && !operation_expired(*work)) {
             // We're not sure the command arrived, let's retransmit.
             if (_command_debugging) {
                 LogWarn(
@@ -376,7 +485,7 @@ void MavlinkCommandSender::receive_timeout(const CommandIdentification& identifi
                     [this, identification = work->identification] {
                         receive_timeout(identification);
                     },
-                    work->timeout_s);
+                    attempt_timeout_s(*work));
             }
         } else {
             // We have tried retransmitting, giving up now.
@@ -428,10 +537,55 @@ void MavlinkCommandSender::receive_timeout(const CommandIdentification& identifi
     }
 }
 
+bool MavlinkCommandSender::operation_expired(const Work& work) const
+{
+    return work.operation_timeout.is_expired(_system_impl.get_time().steady_time());
+}
+
+void MavlinkCommandSender::arm_queued_timeout(const std::shared_ptr<Work>& work)
+{
+    const auto remaining =
+        work->operation_timeout.remaining_s(_system_impl.get_time().steady_time());
+    if (!remaining || *remaining <= 0.0) {
+        return;
+    }
+    work->queue_timeout_cookie = _system_impl.register_timeout_handler(
+        [this, work] { receive_queued_timeout(work); }, *remaining);
+}
+
+void MavlinkCommandSender::receive_queued_timeout(const std::shared_ptr<Work>& work)
+{
+    const auto it = std::find(_work_queue.begin(), _work_queue.end(), work);
+    if (it == _work_queue.end() || work->already_sent) {
+        return;
+    }
+
+    const auto callback = work->callback;
+    _work_queue.erase(it);
+    call_callback(callback, Result::Timeout, NAN);
+    asio::post(_io_context, [this] { do_work(); });
+}
+
+double MavlinkCommandSender::attempt_timeout_s(const Work& work) const
+{
+    return work.operation_timeout.attempt_timeout_s(
+        _system_impl.get_time().steady_time(), work.retries_to_do, work.timeout_s);
+}
+
 void MavlinkCommandSender::do_work()
 {
-    for (const auto& work : _work_queue) {
+    for (auto it = _work_queue.begin(); it != _work_queue.end();) {
+        const auto work = *it;
         if (work->already_sent) {
+            ++it;
+            continue;
+        }
+
+        if (operation_expired(*work)) {
+            const auto callback = work->callback;
+            _system_impl.unregister_timeout_handler(work->queue_timeout_cookie);
+            it = _work_queue.erase(it);
+            call_callback(callback, Result::Timeout, NAN);
             continue;
         }
 
@@ -456,8 +610,12 @@ void MavlinkCommandSender::do_work()
         }
 
         if (already_being_sent) {
+            ++it;
             continue;
         }
+
+        _system_impl.unregister_timeout_handler(work->queue_timeout_cookie);
+        work->queue_timeout_cookie = {};
 
         // LogDebug() << "sending it the first time (" << work->mavlink_command << ")";
         work->time_started = _system_impl.get_time().steady_time();
@@ -478,7 +636,8 @@ void MavlinkCommandSender::do_work()
 
         work->timeout_cookie = _system_impl.register_timeout_handler(
             [this, identification = work->identification] { receive_timeout(identification); },
-            work->timeout_s);
+            attempt_timeout_s(*work));
+        ++it;
     }
 }
 

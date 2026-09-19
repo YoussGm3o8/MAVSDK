@@ -28,6 +28,12 @@ std::pair<Param::Result, int32_t> Param::get_param_int(std::string name) const
     return _impl->get_param_int(name);
 }
 
+std::pair<Param::Result, int32_t>
+Param::get_param_int(std::string name, const OperationOptions& options) const
+{
+    return _impl->get_param_int(name, options);
+}
+
 Param::Result Param::set_param_int(std::string name, int32_t value) const
 {
     return _impl->set_param_int(name, value);
@@ -36,6 +42,12 @@ Param::Result Param::set_param_int(std::string name, int32_t value) const
 std::pair<Param::Result, float> Param::get_param_float(std::string name) const
 {
     return _impl->get_param_float(name);
+}
+
+std::pair<Param::Result, float>
+Param::get_param_float(std::string name, const OperationOptions& options) const
+{
+    return _impl->get_param_float(name, options);
 }
 
 Param::Result Param::set_param_float(std::string name, float value) const

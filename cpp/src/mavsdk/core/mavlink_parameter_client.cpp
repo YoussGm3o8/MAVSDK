@@ -82,6 +82,9 @@ MavlinkParameterClient::~MavlinkParameterClient()
     // (Today this runs during teardown with the io thread already stopped, in which case
     // it degrades to a direct erase.)
     _message_handler.unregister_all_blocking(this);
+    for (const auto& work : _work_queue) {
+        _timeout_handler.remove_blocking(work->queue_timeout_cookie);
+    }
 }
 
 MavlinkParameterClient::Result
@@ -254,6 +257,15 @@ MavlinkParameterClient::set_param_custom(const std::string& name, const std::str
 void MavlinkParameterClient::get_param_async(
     const std::string& name, const GetParamAnyCallback& callback, const void* cookie)
 {
+    get_param_async(name, callback, cookie, std::nullopt);
+}
+
+void MavlinkParameterClient::get_param_async(
+    const std::string& name,
+    const GetParamAnyCallback& callback,
+    const void* cookie,
+    std::optional<std::chrono::milliseconds> timeout)
+{
     if (_parameter_debugging) {
         LogDebug("Getting param {}, extended: {}", name, (_use_extended ? "yes" : "no"));
     }
@@ -266,9 +278,13 @@ void MavlinkParameterClient::get_param_async(
     }
 
     auto new_work = std::make_shared<WorkItem>(WorkItemGet{name, callback}, cookie);
+    if (timeout) {
+        new_work->operation_timeout = OperationTimeout{*timeout, std::chrono::steady_clock::now()};
+    }
     asio::post(_io_context, [this, new_work]() {
         const bool was_empty = _work_queue.empty();
         _work_queue.push_back(new_work);
+        arm_queued_timeout(new_work);
         if (was_empty) {
             do_work();
         }
@@ -299,7 +315,10 @@ void MavlinkParameterClient::get_param_async(
 
 template<class T>
 void MavlinkParameterClient::get_param_async_typesafe(
-    const std::string& name, const GetParamTypesafeCallback<T> callback, const void* cookie)
+    const std::string& name,
+    const GetParamTypesafeCallback<T> callback,
+    const void* cookie,
+    std::optional<std::chrono::milliseconds> timeout)
 {
     // We need to delay the type checking until we get a response from the server.
     GetParamAnyCallback callback_future_result = [callback](Result result, ParamValue value) {
@@ -313,12 +332,15 @@ void MavlinkParameterClient::get_param_async_typesafe(
             callback(result, {});
         }
     };
-    get_param_async(name, callback_future_result, cookie);
+    get_param_async(name, callback_future_result, cookie, timeout);
 }
 
 template<>
 void MavlinkParameterClient::get_param_async_typesafe(
-    const std::string& name, const GetParamTypesafeCallback<int32_t> callback, const void* cookie)
+    const std::string& name,
+    const GetParamTypesafeCallback<int32_t> callback,
+    const void* cookie,
+    std::optional<std::chrono::milliseconds> timeout)
 {
     // We need to delay the type checking until we get a response from the server.
     GetParamAnyCallback callback_future_result = [callback](Result result, ParamValue value) {
@@ -336,7 +358,7 @@ void MavlinkParameterClient::get_param_async_typesafe(
             callback(result, {});
         }
     };
-    get_param_async(name, callback_future_result, cookie);
+    get_param_async(name, callback_future_result, cookie, timeout);
 }
 
 void MavlinkParameterClient::get_param_float_async(
@@ -395,6 +417,40 @@ MavlinkParameterClient::get_param_float(const std::string& name)
     return res.get();
 }
 
+std::pair<MavlinkParameterClient::Result, int32_t>
+MavlinkParameterClient::get_param_int(const std::string& name, const OperationOptions& options)
+{
+    if (options.timeout <= std::chrono::milliseconds::zero()) {
+        return {Result::Timeout, {}};
+    }
+
+    auto prom = std::promise<std::pair<Result, int32_t>>();
+    auto res = prom.get_future();
+    get_param_async_typesafe<int32_t>(
+        name,
+        [&prom](Result result, int32_t value) { prom.set_value({result, value}); },
+        this,
+        options.timeout);
+    return res.get();
+}
+
+std::pair<MavlinkParameterClient::Result, float>
+MavlinkParameterClient::get_param_float(const std::string& name, const OperationOptions& options)
+{
+    if (options.timeout <= std::chrono::milliseconds::zero()) {
+        return {Result::Timeout, {}};
+    }
+
+    auto prom = std::promise<std::pair<Result, float>>();
+    auto res = prom.get_future();
+    get_param_async_typesafe<float>(
+        name,
+        [&prom](Result result, float value) { prom.set_value({result, value}); },
+        this,
+        options.timeout);
+    return res.get();
+}
+
 std::pair<MavlinkParameterClient::Result, std::string>
 MavlinkParameterClient::get_param_custom(const std::string& name)
 {
@@ -449,6 +505,11 @@ void MavlinkParameterClient::cancel_all_param(const void* cookie)
     // where we don't care anymore.
     if (_io_context.stopped()) {
         // io_context is stopped and its thread is dead — safe to access directly.
+        for (const auto& item : _work_queue) {
+            if (item->cookie == cookie) {
+                _timeout_handler.remove(item->queue_timeout_cookie);
+            }
+        }
         _work_queue.erase(
             std::remove_if(
                 _work_queue.begin(),
@@ -462,6 +523,11 @@ void MavlinkParameterClient::cancel_all_param(const void* cookie)
     // self-deadlock on the wait below) and posts otherwise.
     std::promise<void> done;
     asio::dispatch(_io_context, [this, cookie, &done]() {
+        for (const auto& item : _work_queue) {
+            if (item->cookie == cookie) {
+                _timeout_handler.remove(item->queue_timeout_cookie);
+            }
+        }
         _work_queue.erase(
             std::remove_if(
                 _work_queue.begin(),
@@ -480,6 +546,64 @@ void MavlinkParameterClient::clear_cache()
     _param_cache.clear();
 }
 
+void MavlinkParameterClient::notify_work_timeout(WorkItem& work)
+{
+    std::visit(
+        overloaded{
+            [](WorkItemSet& item) {
+                if (item.callback) {
+                    item.callback(Result::Timeout);
+                }
+            },
+            [](WorkItemGet& item) {
+                if (item.callback) {
+                    item.callback(Result::Timeout, {});
+                }
+            },
+            [](WorkItemGetAll& item) {
+                if (item.callback) {
+                    item.callback(Result::Timeout, {});
+                }
+            }},
+        work.work_item_variant);
+}
+
+void MavlinkParameterClient::arm_queued_timeout(const std::shared_ptr<WorkItem>& work)
+{
+    const auto remaining = work->operation_timeout.remaining_s(std::chrono::steady_clock::now());
+    if (!remaining || *remaining <= 0.0) {
+        return;
+    }
+    work->queue_timeout_cookie =
+        _timeout_handler.add([this, work] { receive_queued_timeout(work); }, *remaining);
+}
+
+void MavlinkParameterClient::receive_queued_timeout(const std::shared_ptr<WorkItem>& work)
+{
+    const auto it = std::find(_work_queue.begin(), _work_queue.end(), work);
+    if (it == _work_queue.end() || work->already_requested) {
+        return;
+    }
+
+    const bool was_front = it == _work_queue.begin();
+    _work_queue.erase(it);
+    notify_work_timeout(*work);
+    if (was_front && !_work_queue.empty()) {
+        asio::post(_io_context, [this] { do_work(); });
+    }
+}
+
+bool MavlinkParameterClient::operation_expired(const WorkItem& work) const
+{
+    return work.operation_timeout.is_expired(std::chrono::steady_clock::now());
+}
+
+double MavlinkParameterClient::attempt_timeout_s(const WorkItem& work) const
+{
+    return work.operation_timeout.attempt_timeout_s(
+        std::chrono::steady_clock::now(), work.retries_to_do, _timeout_s_callback());
+}
+
 void MavlinkParameterClient::do_work()
 {
     if (_work_queue.empty()) {
@@ -491,6 +615,19 @@ void MavlinkParameterClient::do_work()
     if (work->already_requested) {
         return;
     }
+
+    if (operation_expired(*work)) {
+        _timeout_handler.remove(work->queue_timeout_cookie);
+        _work_queue.pop_front();
+        if (!_work_queue.empty()) {
+            asio::post(_io_context, [this] { do_work(); });
+        }
+        notify_work_timeout(*work);
+        return;
+    }
+
+    _timeout_handler.remove(work->queue_timeout_cookie);
+    work->queue_timeout_cookie = {};
 
     std::visit(
         overloaded{
@@ -509,7 +646,7 @@ void MavlinkParameterClient::do_work()
                 work->already_requested = true;
                 // We want to get notified if a timeout happens
                 _timeout_cookie =
-                    _timeout_handler.add([this] { receive_timeout(); }, _timeout_s_callback());
+                    _timeout_handler.add([this] { receive_timeout(); }, attempt_timeout_s(*work));
             },
             [&](WorkItemGet& item) {
                 // We can't rely on the cache as we haven't implemented the hash check.
@@ -528,7 +665,7 @@ void MavlinkParameterClient::do_work()
                 work->already_requested = true;
                 // We want to get notified if a timeout happens
                 _timeout_cookie =
-                    _timeout_handler.add([this] { receive_timeout(); }, _timeout_s_callback());
+                    _timeout_handler.add([this] { receive_timeout(); }, attempt_timeout_s(*work));
             },
             [&](WorkItemGetAll& item) {
                 // We can't rely on the cache as we haven't implemented the hash check.
@@ -1233,7 +1370,7 @@ void MavlinkParameterClient::receive_timeout()
     std::visit(
         overloaded{
             [&](WorkItemSet& item) {
-                if (work->retries_to_do > 0) {
+                if (work->retries_to_do > 0 && !operation_expired(*work)) {
                     // We're not sure the command arrived, let's retransmit.
                     LogWarn(
                         "sending again, retries to do: {}  ({}).",
@@ -1252,7 +1389,7 @@ void MavlinkParameterClient::receive_timeout()
                     } else {
                         --work->retries_to_do;
                         _timeout_cookie = _timeout_handler.add(
-                            [this] { receive_timeout(); }, _timeout_s_callback());
+                            [this] { receive_timeout(); }, attempt_timeout_s(*work));
                     }
                 } else {
                     // We have tried retransmitting, giving up now.
@@ -1267,7 +1404,7 @@ void MavlinkParameterClient::receive_timeout()
                 }
             },
             [&](WorkItemGet& item) {
-                if (work->retries_to_do > 0) {
+                if (work->retries_to_do > 0 && !operation_expired(*work)) {
                     // We're not sure the command arrived, let's retransmit.
                     LogWarn("Sending again, retries to do: {}", work->retries_to_do);
                     if (!send_get_param_message(item)) {
@@ -1282,7 +1419,7 @@ void MavlinkParameterClient::receive_timeout()
                     } else {
                         --work->retries_to_do;
                         _timeout_cookie = _timeout_handler.add(
-                            [this] { receive_timeout(); }, _timeout_s_callback());
+                            [this] { receive_timeout(); }, attempt_timeout_s(*work));
                     }
                 } else {
                     // We have tried retransmitting, giving up now.

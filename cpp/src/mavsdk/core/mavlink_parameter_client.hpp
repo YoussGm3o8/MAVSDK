@@ -9,10 +9,13 @@
 #include "mavlink_parameter_cache.hpp"
 #include "mavlink_parameter_helper.hpp"
 #include "timeout_handler.hpp"
+#include "operation_options.hpp"
+#include "operation_timeout.hpp"
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -123,9 +126,14 @@ public:
 
     template<class T>
     void get_param_async_typesafe(
-        const std::string& name, GetParamTypesafeCallback<T> callback, const void* cookie);
+        const std::string& name,
+        GetParamTypesafeCallback<T> callback,
+        const void* cookie,
+        std::optional<std::chrono::milliseconds> timeout = std::nullopt);
 
     std::pair<Result, float> get_param_float(const std::string& name);
+    std::pair<Result, float>
+    get_param_float(const std::string& name, const OperationOptions& options);
 
     using GetParamFloatCallback = std::function<void(Result, float)>;
 
@@ -133,6 +141,8 @@ public:
         const std::string& name, const GetParamFloatCallback& callback, const void* cookie);
 
     std::pair<Result, int32_t> get_param_int(const std::string& name);
+    std::pair<Result, int32_t>
+    get_param_int(const std::string& name, const OperationOptions& options);
 
     using GetParamIntCallback = std::function<void(Result, int32_t)>;
 
@@ -188,6 +198,8 @@ private:
         const void* cookie{nullptr};
         unsigned retries_to_do = 5;
         bool already_requested{false};
+        OperationTimeout operation_timeout{};
+        TimeoutHandler::Cookie queue_timeout_cookie{};
 
         WorkItem() = delete;
         WorkItem(WorkItemVariant new_work_item_variant, const void* new_cookie) :
@@ -199,6 +211,16 @@ private:
     void process_param_ext_ack(const mavlink_message_t& message);
     void process_param_error(const mavlink_message_t& message);
     void receive_timeout();
+    void receive_queued_timeout(const std::shared_ptr<WorkItem>& work);
+    void arm_queued_timeout(const std::shared_ptr<WorkItem>& work);
+    void notify_work_timeout(WorkItem& work);
+    void get_param_async(
+        const std::string& name,
+        const GetParamAnyCallback& callback,
+        const void* cookie,
+        std::optional<std::chrono::milliseconds> timeout);
+    [[nodiscard]] bool operation_expired(const WorkItem& work) const;
+    [[nodiscard]] double attempt_timeout_s(const WorkItem& work) const;
 
     bool send_set_param_message(WorkItemSet& work_item);
     bool send_get_param_message(WorkItemGet& work_item);

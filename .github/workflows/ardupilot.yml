@@ -1,0 +1,91 @@
+name: ArduPilot compatibility
+
+on:
+  push:
+    branches: [nomad/ardupilot]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ardupilot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  copter-4-7-1:
+    name: ArduCopter 4.7.1 SITL
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      ARDUPILOT_COMMIT: dbe792162d06cab66c3475fd5556bf7a120f119e
+      SITL_CONTEXT_COMMIT: eff32c1f98152ac3d1dc09a1e475733b73ce569f
+      SITL_IMAGE: mavsdk-ardupilot-sitl:copter-4.7.1
+      SITL_CONTAINER: mavsdk-ardupilot-sitl
+      MAVSDK_ARDUPILOT_URL: udpin://0.0.0.0:14540
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential cmake ninja-build liblzma-dev python3-lxml
+
+      - name: Configure MAVSDK tests
+        run: >-
+          cmake -S cpp -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_MAVSDK_SERVER=OFF
+          -DBUILD_TESTING=ON
+          -DBUILD_WITHOUT_CURL=ON
+          "-DENABLED_PLUGINS=action;geofence;offboard;param;telemetry"
+
+      - name: Build MAVSDK ArduPilot tests
+        run: cmake --build build --target ardupilot_tests_runner --parallel 2
+
+      - name: Build pinned ArduCopter image
+        run: >-
+          docker build
+          --build-arg COPTER_TAG=${ARDUPILOT_COMMIT}
+          --tag ${SITL_IMAGE}
+          https://github.com/radarku/ardupilot-sitl-docker.git#${SITL_CONTEXT_COMMIT}
+
+      - name: Start clean ArduCopter SITL
+        run: |
+          docker run --detach --rm \
+            --name "${SITL_CONTAINER}" \
+            --network host \
+            --entrypoint /ardupilot/build/sitl/bin/arducopter \
+            "${SITL_IMAGE}" \
+            -w --model quad --speedup 1 --slave 0 \
+            --defaults Tools/autotest/default_params/copter.parm \
+            --serial0 udpclient:127.0.0.1:14540 \
+            --sim-address=127.0.0.1 -I0 \
+            --home 42.3898,-71.1476,14.0,270.0
+
+      - name: Wait for SITL UDP output
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker logs "${SITL_CONTAINER}" 2>&1 | grep -q 'UDP connection'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "${SITL_CONTAINER}"
+          exit 1
+
+      - name: Run ArduPilot compatibility suite
+        run: >-
+          build/src/system_tests/ardupilot_tests_runner
+          --gtest_filter=ArduPilotCompatibility.*:ActionTransport.*:GeofenceTransport.*
+
+      - name: SITL logs on failure
+        if: failure()
+        run: docker logs "${SITL_CONTAINER}" 2>&1 | tail -200 || true
+
+      - name: Tear down SITL
+        if: always()
+        run: docker rm --force "${SITL_CONTAINER}" 2>/dev/null || true

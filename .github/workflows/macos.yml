@@ -4,6 +4,7 @@ on:
   push:
     branches:
     - 'main'
+    - 'nomad/ardupilot'
     tags:
     - 'v*'
     paths-ignore:

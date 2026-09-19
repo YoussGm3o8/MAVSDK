@@ -134,6 +134,23 @@ Action::Result Action::goto_location(
     return _impl->goto_location(latitude_deg, longitude_deg, absolute_altitude_m, yaw_deg);
 }
 
+Action::Result Action::goto_location_relative(
+    double latitude_deg, double longitude_deg, float relative_altitude_m, float yaw_deg) const
+{
+    return _impl->goto_location_relative(latitude_deg, longitude_deg, relative_altitude_m, yaw_deg);
+}
+
+Action::Result Action::goto_location_relative(
+    double latitude_deg,
+    double longitude_deg,
+    float relative_altitude_m,
+    float yaw_deg,
+    const OperationOptions& options) const
+{
+    return _impl->goto_location_relative(
+        latitude_deg, longitude_deg, relative_altitude_m, yaw_deg, options);
+}
+
 void Action::goto_location_fixedwing_async(
     double latitude_deg,
     double longitude_deg,

@@ -18,6 +18,7 @@
 
 #include "handle.hpp"
 #include "mavsdk_export.h"
+#include "operation_options.hpp"
 
 namespace mavsdk {
 
@@ -484,6 +485,36 @@ public:
      
      */
     Result goto_location(double latitude_deg, double longitude_deg, float absolute_altitude_m, float yaw_deg) const;
+
+
+    /**
+     * @brief Move the vehicle to a global position using altitude above home.
+     *
+     * The latitude and longitude are WGS84 degrees. The altitude is in metres
+     * relative to the home position. Yaw is in degrees, clockwise from North.
+     *
+     * @return Result of request.
+     */
+    Result goto_location_relative(
+        double latitude_deg,
+        double longitude_deg,
+        float relative_altitude_m,
+        float yaw_deg) const;
+
+    /**
+     * @brief Move the vehicle to a global position using altitude above home.
+     *
+     * The timeout bounds the complete operation, including a required flight
+     * mode change and all command retries.
+     *
+     * @return Result of request.
+     */
+    Result goto_location_relative(
+        double latitude_deg,
+        double longitude_deg,
+        float relative_altitude_m,
+        float yaw_deg,
+        const OperationOptions& options) const;
 
 
 

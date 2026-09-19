@@ -3,11 +3,54 @@
 #include "math_utils.hpp"
 #include "flight_mode.hpp"
 #include "px4_custom_mode.hpp"
+#include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <future>
 #include <limits>
+#include <optional>
 
 namespace mavsdk {
+namespace {
+
+std::optional<FlightMode> goto_flight_mode(Autopilot autopilot)
+{
+    if (autopilot == Autopilot::Px4) {
+        return FlightMode::Hold;
+    }
+    if (autopilot == Autopilot::ArduPilot) {
+        return FlightMode::Offboard;
+    }
+    return std::nullopt;
+}
+
+std::chrono::milliseconds remaining_budget(SteadyTimePoint deadline, SteadyTimePoint now)
+{
+    return (std::max)(
+        std::chrono::milliseconds::zero(),
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
+}
+
+MavlinkCommandSender::CommandInt make_relative_reposition_command(
+    double latitude_deg,
+    double longitude_deg,
+    float relative_altitude_m,
+    float yaw_deg,
+    uint8_t target_component_id)
+{
+    MavlinkCommandSender::CommandInt command{};
+    command.command = MAV_CMD_DO_REPOSITION;
+    command.target_component_id = target_component_id;
+    command.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT;
+    command.params.maybe_param2 = static_cast<float>(MAV_DO_REPOSITION_FLAGS_CHANGE_MODE);
+    command.params.maybe_param4 = static_cast<float>(to_rad_from_deg(yaw_deg));
+    command.params.x = int32_t(std::round(latitude_deg * 1e7));
+    command.params.y = int32_t(std::round(longitude_deg * 1e7));
+    command.params.maybe_z = relative_altitude_m;
+    return command;
+}
+
+} // namespace
 
 ActionImpl::ActionImpl(System& system) : PluginImplBase(system)
 {
@@ -168,6 +211,65 @@ Action::Result ActionImpl::goto_location(
         });
 
     return fut.get();
+}
+
+Action::Result ActionImpl::goto_location_relative(
+    double latitude_deg, double longitude_deg, float relative_altitude_m, float yaw_deg)
+{
+    return goto_location_relative_impl(
+        latitude_deg, longitude_deg, relative_altitude_m, yaw_deg, nullptr);
+}
+
+Action::Result ActionImpl::goto_location_relative(
+    double latitude_deg,
+    double longitude_deg,
+    float relative_altitude_m,
+    float yaw_deg,
+    const OperationOptions& options)
+{
+    return goto_location_relative_impl(
+        latitude_deg, longitude_deg, relative_altitude_m, yaw_deg, &options);
+}
+
+Action::Result ActionImpl::goto_location_relative_impl(
+    double latitude_deg,
+    double longitude_deg,
+    float relative_altitude_m,
+    float yaw_deg,
+    const OperationOptions* options)
+{
+    const auto started = _system_impl->get_time().steady_time();
+    if (options != nullptr && options->timeout <= std::chrono::milliseconds::zero()) {
+        return Action::Result::Timeout;
+    }
+    const std::optional<SteadyTimePoint> deadline =
+        options == nullptr ? std::nullopt : std::make_optional(started + options->timeout);
+
+    const auto required_mode = goto_flight_mode(_system_impl->effective_autopilot());
+    if (required_mode && _system_impl->get_flight_mode() != *required_mode) {
+        const auto result = deadline ?
+                                _system_impl->set_flight_mode(
+                                    *required_mode,
+                                    OperationOptions{remaining_budget(
+                                        *deadline, _system_impl->get_time().steady_time())}) :
+                                _system_impl->set_flight_mode(*required_mode);
+        if (result != MavlinkCommandSender::Result::Success) {
+            return action_result_from_command_result(result);
+        }
+    }
+
+    auto command = make_relative_reposition_command(
+        latitude_deg,
+        longitude_deg,
+        relative_altitude_m,
+        yaw_deg,
+        _system_impl->get_autopilot_id());
+    const auto result = deadline ? _system_impl->send_command(
+                                       command,
+                                       OperationOptions{remaining_budget(
+                                           *deadline, _system_impl->get_time().steady_time())}) :
+                                   _system_impl->send_command(command);
+    return action_result_from_command_result(result);
 }
 
 Action::Result ActionImpl::goto_location_fixedwing(

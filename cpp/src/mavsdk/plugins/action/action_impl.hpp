@@ -35,6 +35,14 @@ public:
         const double longitude_deg,
         const float altitude_amsl_m,
         const float yaw_deg);
+    Action::Result goto_location_relative(
+        double latitude_deg, double longitude_deg, float relative_altitude_m, float yaw_deg);
+    Action::Result goto_location_relative(
+        double latitude_deg,
+        double longitude_deg,
+        float relative_altitude_m,
+        float yaw_deg,
+        const OperationOptions& options);
     Action::Result goto_location_fixedwing(
         const double latitude_deg,
         const double longitude_deg,
@@ -121,6 +129,12 @@ public:
     std::pair<Action::Result, float> get_return_to_launch_altitude() const;
 
 private:
+    Action::Result goto_location_relative_impl(
+        double latitude_deg,
+        double longitude_deg,
+        float relative_altitude_m,
+        float yaw_deg,
+        const OperationOptions* options);
     void process_extended_sys_state(const mavlink_message_t& message);
 
     static Action::Result action_result_from_command_result(MavlinkCommandSender::Result result);
