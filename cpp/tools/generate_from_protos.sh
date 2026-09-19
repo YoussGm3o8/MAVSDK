@@ -182,5 +182,4 @@ python3 "${script_dir}/grpc_server_jinja.py" "${plugin_list[@]}"
 
 # Action and Param are generated from MAVSDK-Proto, but their ArduPilot-compatible
 # overloads are generic MAVSDK APIs until the schema changes land upstream.
-compatibility_patch="${script_dir}/ardupilot_compatibility_generated.patch"
-git -C "${repo_dir}" apply --whitespace=nowarn "${compatibility_patch}"
+python3 "${script_dir}/apply_ardupilot_compatibility.py"
