@@ -75,6 +75,42 @@ target_link_libraries(system_tests_runner
     fmt::fmt
 )
 
+add_executable(ardupilot_tests_runner EXCLUDE_FROM_ALL
+    ardupilot_compatibility.cpp
+    ardupilot_action_wire.cpp
+    ardupilot_geofence_timeout.cpp
+)
+
+target_include_directories(ardupilot_tests_runner
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/mavsdk/core
+)
+
+target_link_libraries(ardupilot_tests_runner
+    PRIVATE
+    mavsdk
+    GTest::gtest
+    GTest::gtest_main
+)
+
+if(WIN32 AND BUILD_SHARED_LIBS)
+    foreach(test_runner IN ITEMS system_tests_runner ardupilot_tests_runner)
+        add_custom_command(TARGET ${test_runner} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:mavsdk> $<TARGET_FILE_DIR:${test_runner}>)
+    endforeach()
+endif()
+
+set_target_properties(ardupilot_tests_runner
+    PROPERTIES COMPILE_FLAGS ${warnings}
+)
+
+if(MSVC)
+    target_compile_options(ardupilot_tests_runner PRIVATE /wd4996)
+else()
+    target_compile_options(ardupilot_tests_runner PRIVATE -Wno-deprecated-declarations)
+endif()
+
 set_target_properties(system_tests_runner
     PROPERTIES COMPILE_FLAGS ${warnings}
 )

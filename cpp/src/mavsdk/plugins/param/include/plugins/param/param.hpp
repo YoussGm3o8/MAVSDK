@@ -18,6 +18,7 @@
 
 #include "handle.hpp"
 #include "mavsdk_export.h"
+#include "operation_options.hpp"
 
 namespace mavsdk {
 
@@ -255,6 +256,15 @@ public:
     std::pair<Result, int32_t> get_param_int(std::string name) const;
 
 
+    /**
+     * @brief Get an int parameter with an overall operation timeout.
+     *
+     * The timeout includes queueing and all internal retries.
+     */
+    std::pair<Result, int32_t> get_param_int(
+        std::string name, const OperationOptions& options) const;
+
+
 
 
 
@@ -287,6 +297,15 @@ public:
      * @return Result of request.
      */
     std::pair<Result, float> get_param_float(std::string name) const;
+
+
+    /**
+     * @brief Get a float parameter with an overall operation timeout.
+     *
+     * The timeout includes queueing and all internal retries.
+     */
+    std::pair<Result, float> get_param_float(
+        std::string name, const OperationOptions& options) const;
 
 
 

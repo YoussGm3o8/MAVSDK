@@ -24,6 +24,12 @@ target_link_libraries(unit_tests_runner
     fmt::fmt
 )
 
+if(WIN32 AND BUILD_SHARED_LIBS)
+    add_custom_command(TARGET unit_tests_runner POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:mavsdk> $<TARGET_FILE_DIR:unit_tests_runner>)
+endif()
+
 target_include_directories(unit_tests_runner
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../mavsdk/core
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/../mavsdk/core

@@ -91,6 +91,45 @@ MavlinkPassthroughImpl::send_command_int(const MavlinkPassthrough::CommandInt& c
         _system_impl->send_command(command_internal));
 }
 
+MavlinkPassthrough::Result MavlinkPassthroughImpl::send_command_long(
+    const MavlinkPassthrough::CommandLong& command, const OperationOptions& options)
+{
+    MavlinkCommandSender::CommandLong command_internal{};
+    command_internal.target_system_id = command.target_sysid;
+    command_internal.target_component_id = command.target_compid;
+    command_internal.command = command.command;
+    command_internal.params.maybe_param1 = command.param1;
+    command_internal.params.maybe_param2 = command.param2;
+    command_internal.params.maybe_param3 = command.param3;
+    command_internal.params.maybe_param4 = command.param4;
+    command_internal.params.maybe_param5 = command.param5;
+    command_internal.params.maybe_param6 = command.param6;
+    command_internal.params.maybe_param7 = command.param7;
+
+    return to_mavlink_passthrough_result_from_mavlink_commands_result(
+        _system_impl->send_command(command_internal, options));
+}
+
+MavlinkPassthrough::Result MavlinkPassthroughImpl::send_command_int(
+    const MavlinkPassthrough::CommandInt& command, const OperationOptions& options)
+{
+    MavlinkCommandSender::CommandInt command_internal{};
+    command_internal.target_system_id = command.target_sysid;
+    command_internal.target_component_id = command.target_compid;
+    command_internal.frame = command.frame;
+    command_internal.command = command.command;
+    command_internal.params.maybe_param1 = command.param1;
+    command_internal.params.maybe_param2 = command.param2;
+    command_internal.params.maybe_param3 = command.param3;
+    command_internal.params.maybe_param4 = command.param4;
+    command_internal.params.x = command.x;
+    command_internal.params.y = command.y;
+    command_internal.params.maybe_z = command.z;
+
+    return to_mavlink_passthrough_result_from_mavlink_commands_result(
+        _system_impl->send_command(command_internal, options));
+}
+
 mavlink_message_t MavlinkPassthroughImpl::make_command_ack_message(
     const uint8_t target_sysid,
     const uint8_t target_compid,

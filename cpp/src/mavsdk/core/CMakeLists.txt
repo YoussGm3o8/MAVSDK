@@ -256,6 +256,7 @@ install(FILES
     include/mavsdk/mavlink_address.hpp
     include/mavsdk/vehicle.hpp
     include/mavsdk/overloaded.hpp
+    include/mavsdk/operation_options.hpp
     ${CMAKE_CURRENT_BINARY_DIR}/include/mavsdk/mavlink_include.hpp
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/mavsdk"
 )
@@ -295,6 +296,7 @@ list(APPEND UNIT_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/mavsdk/core/vehicle_test.cpp
     ${PROJECT_SOURCE_DIR}/mavsdk/core/autopilot_test.cpp
     ${PROJECT_SOURCE_DIR}/mavsdk/core/overloaded_test.cpp
+    ${PROJECT_SOURCE_DIR}/mavsdk/core/operation_timeout_test.cpp
     ${PROJECT_SOURCE_DIR}/mavsdk/core/handle_factory_test.cpp
     ${PROJECT_SOURCE_DIR}/mavsdk/core/compatibility_mode_test.cpp
     ${PROJECT_SOURCE_DIR}/mavsdk/core/param_value_xml_test.cpp

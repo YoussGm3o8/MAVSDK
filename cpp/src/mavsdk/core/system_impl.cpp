@@ -842,6 +842,26 @@ std::pair<MavlinkParameterClient::Result, int> SystemImpl::get_param_int(
         ->get_param_int(name);
 }
 
+std::pair<MavlinkParameterClient::Result, float> SystemImpl::get_param_float(
+    const std::string& name,
+    const OperationOptions& options,
+    std::optional<uint8_t> maybe_component_id,
+    bool extended)
+{
+    return param_sender(maybe_component_id ? maybe_component_id.value() : 1, extended)
+        ->get_param_float(name, options);
+}
+
+std::pair<MavlinkParameterClient::Result, int> SystemImpl::get_param_int(
+    const std::string& name,
+    const OperationOptions& options,
+    std::optional<uint8_t> maybe_component_id,
+    bool extended)
+{
+    return param_sender(maybe_component_id ? maybe_component_id.value() : 1, extended)
+        ->get_param_int(name, options);
+}
+
 std::pair<MavlinkParameterClient::Result, std::string>
 SystemImpl::get_param_custom(const std::string& name, std::optional<uint8_t> maybe_component_id)
 {
@@ -905,6 +925,19 @@ SystemImpl::set_flight_mode(FlightMode system_mode, uint8_t component_id)
     }
 
     return send_command(result.second);
+}
+
+MavlinkCommandSender::Result SystemImpl::set_flight_mode(
+    FlightMode system_mode, const OperationOptions& options, uint8_t component_id)
+{
+    std::pair<MavlinkCommandSender::Result, MavlinkCommandSender::CommandLong> result =
+        make_command_flight_mode(system_mode, component_id);
+
+    if (result.first != MavlinkCommandSender::Result::Success) {
+        return result.first;
+    }
+
+    return send_command(result.second, options);
 }
 
 void SystemImpl::set_flight_mode_async(
@@ -1253,6 +1286,32 @@ MavlinkCommandSender::Result SystemImpl::send_command(MavlinkCommandSender::Comm
     }
     command.target_system_id = get_system_id();
     return _command_sender.send_command(command);
+}
+
+MavlinkCommandSender::Result SystemImpl::send_command(
+    MavlinkCommandSender::CommandLong& command, const OperationOptions& options)
+{
+    {
+        std::lock_guard<std::mutex> lock(_components_mutex);
+        if (_target_address.system_id == 0 && _components.empty()) {
+            return MavlinkCommandSender::Result::NoSystem;
+        }
+    }
+    command.target_system_id = get_system_id();
+    return _command_sender.send_command(command, options);
+}
+
+MavlinkCommandSender::Result
+SystemImpl::send_command(MavlinkCommandSender::CommandInt& command, const OperationOptions& options)
+{
+    {
+        std::lock_guard<std::mutex> lock(_components_mutex);
+        if (_target_address.system_id == 0 && _components.empty()) {
+            return MavlinkCommandSender::Result::NoSystem;
+        }
+    }
+    command.target_system_id = get_system_id();
+    return _command_sender.send_command(command, options);
 }
 
 void SystemImpl::send_command_async(

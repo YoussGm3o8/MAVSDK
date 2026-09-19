@@ -131,6 +131,10 @@ public:
 
     MavlinkCommandSender::Result send_command(MavlinkCommandSender::CommandLong& command);
     MavlinkCommandSender::Result send_command(MavlinkCommandSender::CommandInt& command);
+    MavlinkCommandSender::Result
+    send_command(MavlinkCommandSender::CommandLong& command, const OperationOptions& options);
+    MavlinkCommandSender::Result
+    send_command(MavlinkCommandSender::CommandInt& command, const OperationOptions& options);
 
     void send_command_async(
         MavlinkCommandSender::CommandLong command, const CommandResultCallback& callback);
@@ -231,6 +235,10 @@ public:
 
     MavlinkCommandSender::Result
     set_flight_mode(FlightMode mode, uint8_t component_id = MAV_COMP_ID_AUTOPILOT1);
+    MavlinkCommandSender::Result set_flight_mode(
+        FlightMode mode,
+        const OperationOptions& options,
+        uint8_t component_id = MAV_COMP_ID_AUTOPILOT1);
     void set_flight_mode_async(
         FlightMode mode,
         const CommandResultCallback& callback,
@@ -249,8 +257,18 @@ public:
         const std::string& name,
         std::optional<uint8_t> maybe_component_id = {},
         bool extended = false);
+    std::pair<MavlinkParameterClient::Result, float> get_param_float(
+        const std::string& name,
+        const OperationOptions& options,
+        std::optional<uint8_t> maybe_component_id = {},
+        bool extended = false);
     std::pair<MavlinkParameterClient::Result, int> get_param_int(
         const std::string& name,
+        std::optional<uint8_t> maybe_component_id = {},
+        bool extended = false);
+    std::pair<MavlinkParameterClient::Result, int> get_param_int(
+        const std::string& name,
+        const OperationOptions& options,
         std::optional<uint8_t> maybe_component_id = {},
         bool extended = false);
     std::pair<MavlinkParameterClient::Result, std::string>

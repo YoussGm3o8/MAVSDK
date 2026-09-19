@@ -12,6 +12,23 @@
 #include "unused.hpp"
 
 namespace mavsdk {
+namespace {
+
+struct MessageRate {
+    uint32_t message_id;
+    double rate_hz;
+};
+
+constexpr std::array<MessageRate, 6> kArduPilotCoreMessageRates{{
+    {MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 5.0},
+    {MAVLINK_MSG_ID_ATTITUDE, 5.0},
+    {MAVLINK_MSG_ID_GPS_RAW_INT, 2.0},
+    {MAVLINK_MSG_ID_BATTERY_STATUS, 1.0},
+    {MAVLINK_MSG_ID_SYS_STATUS, 1.0},
+    {MAVLINK_MSG_ID_EXTENDED_SYS_STATE, 1.0},
+}};
+
+} // namespace
 
 template class MAVSDK_TEMPL_INST CallbackList<Telemetry::PositionVelocityNed>;
 template class MAVSDK_TEMPL_INST CallbackList<Telemetry::Position>;
@@ -196,9 +213,32 @@ void TelemetryImpl::deinit()
 
 void TelemetryImpl::enable()
 {
+    initialize_ardupilot_message_rates();
+
     // We're going to retry until we have the Home Position.
     _homepos_cookie =
         _system_impl->add_call_every([this]() { request_home_position_again(); }, 2.0f);
+}
+
+void TelemetryImpl::initialize_ardupilot_message_rates()
+{
+    if (_system_impl->effective_autopilot() != Autopilot::ArduPilot) {
+        return;
+    }
+
+    for (const auto& message_rate : kArduPilotCoreMessageRates) {
+        _system_impl->set_msg_rate_async(
+            message_rate.message_id,
+            message_rate.rate_hz,
+            [message_id = message_rate.message_id](MavlinkCommandSender::Result result, float) {
+                if (result != MavlinkCommandSender::Result::Success) {
+                    LogWarn(
+                        "ArduPilot message rate request for {} failed: {}",
+                        message_id,
+                        static_cast<int>(result));
+                }
+            });
+    }
 }
 
 void TelemetryImpl::disable()
