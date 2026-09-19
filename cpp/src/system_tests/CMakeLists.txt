@@ -83,6 +83,7 @@ add_executable(ardupilot_tests_runner EXCLUDE_FROM_ALL
     ardupilot_geofence_timeout.cpp
     ardupilot_geofence_faults.cpp
     operation_deadline_wire.cpp
+    offboard_one_shot.cpp
 )
 
 target_include_directories(ardupilot_tests_runner

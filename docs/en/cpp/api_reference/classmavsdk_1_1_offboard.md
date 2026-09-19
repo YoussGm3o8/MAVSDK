@@ -62,6 +62,7 @@ bool | [is_active](#classmavsdk_1_1_offboard_1aa5e0f3c02a03f2667f82d5e162221ff5)
 [Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_position_ned](#classmavsdk_1_1_offboard_1ade7dcec93ebee17de60687a75184b8b6) ([PositionNedYaw](structmavsdk_1_1_offboard_1_1_position_ned_yaw.md) position_ned_yaw)const | Set the position in NED coordinates and yaw.
 [Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_position_global](#classmavsdk_1_1_offboard_1a97b2bd8f516e267e5b28373f369ff8d3) ([PositionGlobalYaw](structmavsdk_1_1_offboard_1_1_position_global_yaw.md) position_global_yaw)const | Set the position in Global coordinates (latitude, longitude, altitude) and yaw.
 [Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_velocity_body](#classmavsdk_1_1_offboard_1abe7364f0a48dda4df34c5c67d177cfb4) ([VelocityBodyYawspeed](structmavsdk_1_1_offboard_1_1_velocity_body_yawspeed.md) velocity_body_yawspeed)const | Set the velocity in body coordinates and yaw angular rate. Not available for fixed-wing aircraft.
+[Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_velocity_body_once](#classmavsdk_1_1_offboard_1a5e98c0751b506a2be5a79e75b11e92d3) ([VelocityBodyYawspeed](structmavsdk_1_1_offboard_1_1_velocity_body_yawspeed.md) velocity_body_yawspeed)const | Send one body-frame velocity setpoint without storing or repeating it.
 [Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_velocity_ned](#classmavsdk_1_1_offboard_1a4edbc6e4528ff955d4e46e7c4e711732) ([VelocityNedYaw](structmavsdk_1_1_offboard_1_1_velocity_ned_yaw.md) velocity_ned_yaw)const | Set the velocity in NED coordinates and yaw. Not available for fixed-wing aircraft.
 [Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_position_velocity_ned](#classmavsdk_1_1_offboard_1ae422165680b434eed74e84cc901e3a33) ([PositionNedYaw](structmavsdk_1_1_offboard_1_1_position_ned_yaw.md) position_ned_yaw, [VelocityNedYaw](structmavsdk_1_1_offboard_1_1_velocity_ned_yaw.md) velocity_ned_yaw)const | Set the position in NED coordinates, with the velocity to be used as feed-forward.
 [Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) | [set_position_velocity_acceleration_ned](#classmavsdk_1_1_offboard_1a845aab746fc078d1ee2848df33c04eb9) ([PositionNedYaw](structmavsdk_1_1_offboard_1_1_position_ned_yaw.md) position_ned_yaw, [VelocityNedYaw](structmavsdk_1_1_offboard_1_1_velocity_ned_yaw.md) velocity_ned_yaw, [AccelerationNed](structmavsdk_1_1_offboard_1_1_acceleration_ned.md) acceleration_ned)const | Set the position, velocity and acceleration in NED coordinates, with velocity and acceleration used as feed-forward.
@@ -356,6 +357,24 @@ This function is blocking.
 **Returns**
 
 &emsp;[Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) - Result of request.
+
+### set_velocity_body_once() {#classmavsdk_1_1_offboard_1a5e98c0751b506a2be5a79e75b11e92d3}
+```cpp
+Result mavsdk::Offboard::set_velocity_body_once(VelocityBodyYawspeed velocity_body_yawspeed) const
+```
+
+
+Send one body-frame velocity setpoint without storing or repeating it.
+
+Does not change flight mode or enable [Offboard](classmavsdk_1_1_offboard.md). The caller owns refresh, stop commands and verification. Success means the message was queued, not vehicle acceptance. Returns Busy while automatic setpoints are enabled, Failed for nonfinite values, or ConnectionError on send failure. Yaw rate is in degrees per second, as with set_velocity_body.
+
+**Parameters**
+
+* [VelocityBodyYawspeed](structmavsdk_1_1_offboard_1_1_velocity_body_yawspeed.md) **velocity_body_yawspeed** - Body velocity and yaw rate to send once.
+
+**Returns**
+
+&emsp;[Result](classmavsdk_1_1_offboard.md#classmavsdk_1_1_offboard_1a2d4d594301d8c756429457b0982130e9) - Result of the transport request.
 
 ### set_velocity_ned() {#classmavsdk_1_1_offboard_1a4edbc6e4528ff955d4e46e7c4e711732}
 ```cpp

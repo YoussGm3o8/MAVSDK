@@ -83,6 +83,11 @@ Offboard::Result Offboard::set_velocity_body(VelocityBodyYawspeed velocity_body_
     return _impl->set_velocity_body(velocity_body_yawspeed);
 }
 
+Offboard::Result Offboard::set_velocity_body_once(VelocityBodyYawspeed velocity_body_yawspeed) const
+{
+    return _impl->set_velocity_body_once(velocity_body_yawspeed);
+}
+
 Offboard::Result Offboard::set_velocity_ned(VelocityNedYaw velocity_ned_yaw) const
 {
     return _impl->set_velocity_ned(velocity_ned_yaw);

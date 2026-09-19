@@ -562,6 +562,21 @@ public:
     Result set_velocity_body(VelocityBodyYawspeed velocity_body_yawspeed) const;
 
 
+    /**
+     * @brief Send one body-frame velocity setpoint without storing or repeating it.
+     *
+     * Does not change flight mode or enable Offboard. The caller owns refresh,
+     * stop commands and verification. Success means the message was queued,
+     * not vehicle acceptance. Returns Busy while automatic setpoints
+     * are enabled, Failed for nonfinite values, or ConnectionError on send failure.
+     * Yaw rate is in degrees per second, as with set_velocity_body.
+     *
+     * @param velocity_body_yawspeed Body velocity and yaw rate to send once.
+     * @return Result of the transport request.
+     */
+    Result set_velocity_body_once(VelocityBodyYawspeed velocity_body_yawspeed) const;
+
+
 
 
 
