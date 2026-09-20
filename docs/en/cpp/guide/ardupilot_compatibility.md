@@ -209,9 +209,14 @@ All platforms, including iOS device and simulator builds, apply the same MAVLink
 patch once. It uses the pinned nested generator without a build-time pip install.
 The removed iOS patch attempted to remove the same pip code a second time.
 
+Windows ZIP files are created under `cpp/`. Upload and release actions use those
+repository-root-relative paths, and a missing combined archive fails CI.
+
 ## Upstream references
 
 - [Pinned generator and shared platform patch contribution](https://github.com/mavlink/MAVSDK/pull/3102)
+- [Geofence input validation contribution](https://github.com/mavlink/MAVSDK/pull/3103)
+- [Windows archive upload path contribution](https://github.com/mavlink/MAVSDK/pull/3104)
 
 - [ArduPilot support tracker](https://github.com/mavlink/MAVSDK/issues/1568)
 - [Original ArduPilot architecture discussion](https://github.com/mavlink/MAVSDK/issues/728)
