@@ -618,9 +618,12 @@ bool SystemImpl::send_message(mavlink_message_t& message)
 }
 
 bool SystemImpl::queue_message(
-    std::function<mavlink_message_t(MavlinkAddress mavlink_address, uint8_t channel)> fun)
+    std::function<mavlink_message_t(MavlinkAddress mavlink_address, uint8_t channel)> fun,
+    TransmissionAdmission transmission_admission,
+    std::function<void()> on_admission_denied)
 {
-    return _mavsdk_impl.default_server_component_impl().queue_message(fun);
+    return _mavsdk_impl.default_server_component_impl().queue_message(
+        std::move(fun), std::move(transmission_admission), std::move(on_admission_denied));
 }
 
 void SystemImpl::send_autopilot_version_request()

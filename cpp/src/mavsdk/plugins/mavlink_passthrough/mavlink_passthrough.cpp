@@ -115,6 +115,8 @@ std::ostream& operator<<(std::ostream& str, MavlinkPassthrough::Result const& re
             return str << "ParamNotFound";
         case MavlinkPassthrough::Result::ParamValueUnsupported:
             return str << "ParamValueUnsupported";
+        case MavlinkPassthrough::Result::CommandAdmissionCancelled:
+            return str << "CommandAdmissionCancelled";
     }
 }
 

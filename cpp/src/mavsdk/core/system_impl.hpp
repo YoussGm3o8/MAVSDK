@@ -9,6 +9,7 @@
 #include "mavlink_include.hpp"
 #include "mavlink_parameter_client.hpp"
 #include "mavlink_command_sender.hpp"
+#include "operation_options.hpp"
 #include "mavlink_ftp_client.hpp"
 #include "mavlink_message_handler.hpp"
 #include "mavlink_mission_transfer_client.hpp"
@@ -120,7 +121,9 @@ public:
 
     bool send_message(mavlink_message_t& message);
     bool queue_message(
-        std::function<mavlink_message_t(MavlinkAddress mavlink_address, uint8_t channel)> fun);
+        std::function<mavlink_message_t(MavlinkAddress mavlink_address, uint8_t channel)> fun,
+        TransmissionAdmission transmission_admission = {},
+        std::function<void()> on_admission_denied = {});
 
     Autopilot autopilot() const { return _autopilot; };
 
