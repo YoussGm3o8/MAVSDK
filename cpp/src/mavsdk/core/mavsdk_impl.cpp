@@ -1048,12 +1048,7 @@ void MavsdkImpl::deliver_message(
         transmit();
     };
 
-    bool admitted = false;
-    try {
-        admitted = transmission_admission(guarded_transmit);
-    } catch (...) {
-        LogErr("Transmission admission callback threw an exception");
-    }
+    const bool admitted = transmission_admission(guarded_transmit);
 
     if (!transmit_called && on_admission_denied) {
         on_admission_denied();
