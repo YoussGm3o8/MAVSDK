@@ -24,6 +24,7 @@
 #include "mavsdk.hpp"
 #include "mavlink_include.hpp"
 #include "mavlink_message_handler.hpp"
+#include "operation_options.hpp"
 #include "locked_queue.hpp"
 #include "server_component.hpp"
 #include "system.hpp"
@@ -83,7 +84,10 @@ public:
     Mavsdk::Configuration get_configuration() const;
     ComponentType get_component_type() const;
 
-    bool send_message(mavlink_message_t& message);
+    bool send_message(
+        mavlink_message_t& message,
+        TransmissionAdmission transmission_admission = {},
+        std::function<void()> on_admission_denied = {});
     uint8_t get_own_system_id() const;
     uint8_t get_own_component_id() const;
 
@@ -232,7 +236,10 @@ private:
     void process_message(mavlink_message_t& message, Connection* connection);
     void process_libmav_message(const Mavsdk::MavlinkMessage& message, Connection* connection);
 
-    void deliver_message(mavlink_message_t& message);
+    void deliver_message(
+        mavlink_message_t& message,
+        const TransmissionAdmission& transmission_admission,
+        const std::function<void()>& on_admission_denied);
 
     bool is_any_system_connected() const;
 

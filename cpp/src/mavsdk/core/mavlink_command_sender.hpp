@@ -13,6 +13,7 @@
 #include <deque>
 #include <string>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <variant>
@@ -40,7 +41,8 @@ public:
         TemporarilyRejected,
         Failed,
         Cancelled,
-        UnknownError
+        UnknownError,
+        AdmissionCancelled
     };
 
     using CommandResultCallback = std::function<void(Result, float)>;
@@ -144,6 +146,7 @@ private:
         Command command;
         CommandIdentification identification{};
         CommandResultCallback callback{};
+        TransmissionAdmission transmission_admission{};
         SteadyTimePoint time_started{};
         TimeoutHandler::Cookie timeout_cookie{};
         TimeoutHandler::Cookie queue_timeout_cookie{};
@@ -151,6 +154,13 @@ private:
         OperationTimeout operation_timeout{};
         int retries_to_do;
         bool already_sent{false};
+    };
+
+    struct CallbackState {
+        explicit CallbackState(MavlinkCommandSender* sender_value) : sender(sender_value) {}
+
+        std::mutex mutex;
+        MavlinkCommandSender* sender;
     };
 
     template<typename CommandType>
@@ -187,25 +197,30 @@ private:
         const CommandInt& command,
         const CommandResultCallback& callback,
         unsigned retries,
-        std::optional<std::chrono::milliseconds> timeout);
+        std::optional<std::chrono::milliseconds> timeout,
+        TransmissionAdmission transmission_admission);
     void queue_command_async_impl(
         const CommandLong& command,
         const CommandResultCallback& callback,
         unsigned retries,
-        std::optional<std::chrono::milliseconds> timeout);
+        std::optional<std::chrono::milliseconds> timeout,
+        TransmissionAdmission transmission_admission);
 
     [[nodiscard]] bool operation_expired(const Work& work) const;
     [[nodiscard]] double attempt_timeout_s(const Work& work) const;
 
     void call_callback(const CommandResultCallback& callback, Result result, float progress) const;
 
-    bool send_mavlink_message(const Command& command) const;
+    bool transmission_is_admitted(const Work& work) const;
+    bool send_mavlink_message(const Command& command, const std::shared_ptr<Work>& work) const;
+    void cancel_work_for_admission(const std::shared_ptr<Work>& work);
 
     float maybe_reserved(const std::optional<float>& maybe_param) const;
 
     SystemImpl& _system_impl;
     std::deque<std::shared_ptr<Work>> _work_queue{};
     asio::io_context& _io_context;
+    std::shared_ptr<CallbackState> _callback_state;
 
     bool _command_debugging{false};
 };

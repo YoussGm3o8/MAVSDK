@@ -887,7 +887,10 @@ void MavsdkImpl::process_libmav_message(
     }
 }
 
-bool MavsdkImpl::send_message(mavlink_message_t& message)
+bool MavsdkImpl::send_message(
+    mavlink_message_t& message,
+    TransmissionAdmission transmission_admission,
+    std::function<void()> on_admission_denied)
 {
     // Post, not dispatch: deliver_message() always runs on the io_context thread, so
     // ordering is preserved (posts are executed FIFO) and no mutex is required. Dispatching
@@ -897,12 +900,22 @@ bool MavsdkImpl::send_message(mavlink_message_t& message)
     // Note that the return value only says the message was queued, never that it went out:
     // the actual send happens later on the io thread. Failures are reported through
     // Mavsdk::subscribe_connection_errors() instead.
-    asio::post(_io_context, [this, msg = message]() mutable { deliver_message(msg); });
+    asio::post(
+        _io_context,
+        [this,
+         msg = message,
+         transmission_admission = std::move(transmission_admission),
+         on_admission_denied = std::move(on_admission_denied)]() mutable {
+            deliver_message(msg, transmission_admission, on_admission_denied);
+        });
 
     return true;
 }
 
-void MavsdkImpl::deliver_message(mavlink_message_t& message)
+void MavsdkImpl::deliver_message(
+    mavlink_message_t& message,
+    const TransmissionAdmission& transmission_admission,
+    const std::function<void()>& on_admission_denied)
 {
     if (_message_logging_on) {
         LogDebug(
@@ -990,33 +1003,62 @@ void MavsdkImpl::deliver_message(mavlink_message_t& message)
         }
     }
 
-    std::lock_guard lock(_mutex);
+    const auto transmit = [this, &message]() {
+        std::lock_guard lock(_mutex);
 
-    if (_connections.empty()) {
-        // We obviously can't send any messages without a connection added, so
-        // we silently ignore this.
+        if (_connections.empty()) {
+            // We obviously can't send any messages without a connection added, so
+            // we silently ignore this.
+            return;
+        }
+
+        uint8_t successful_emissions = 0;
+        for (auto& _connection : _connections) {
+            const uint8_t target_system_id = get_target_system_id(message);
+
+            if (target_system_id != 0 && !(*_connection.connection).has_system_id(target_system_id)) {
+                continue;
+            }
+            const auto result = (*_connection.connection).send_message(message);
+            if (result.first) {
+                successful_emissions++;
+            } else {
+                _connections_errors_subscriptions.queue(
+                    Mavsdk::ConnectionError{result.second, _connection.handle},
+                    [this](const auto& func) { call_user_callback(func); });
+            }
+        }
+
+        if (successful_emissions == 0) {
+            LogErr("Sending message failed");
+        }
+    };
+
+    if (!transmission_admission) {
+        transmit();
         return;
     }
 
-    uint8_t successful_emissions = 0;
-    for (auto& _connection : _connections) {
-        const uint8_t target_system_id = get_target_system_id(message);
+    bool transmit_called = false;
+    const auto guarded_transmit = [&transmit, &transmit_called]() {
+        if (transmit_called) {
+            return;
+        }
+        transmit_called = true;
+        transmit();
+    };
 
-        if (target_system_id != 0 && !(*_connection.connection).has_system_id(target_system_id)) {
-            continue;
-        }
-        const auto result = (*_connection.connection).send_message(message);
-        if (result.first) {
-            successful_emissions++;
-        } else {
-            _connections_errors_subscriptions.queue(
-                Mavsdk::ConnectionError{result.second, _connection.handle},
-                [this](const auto& func) { call_user_callback(func); });
-        }
+    bool admitted = false;
+    try {
+        admitted = transmission_admission(guarded_transmit);
+    } catch (...) {
+        LogErr("Transmission admission callback threw an exception");
     }
 
-    if (successful_emissions == 0) {
-        LogErr("Sending message failed");
+    if (!transmit_called && on_admission_denied) {
+        on_admission_denied();
+    } else if (!admitted && transmit_called) {
+        LogErr("Transmission admission callback denied after sending");
     }
 }
 

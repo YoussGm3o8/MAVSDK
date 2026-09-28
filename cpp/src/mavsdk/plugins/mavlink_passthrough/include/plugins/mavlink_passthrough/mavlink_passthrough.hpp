@@ -84,6 +84,7 @@ public:
         ParamValueTooLong, /**< @brief Param value too long. */
         ParamNotFound, /**< @brief Param not found. */
         ParamValueUnsupported, /**< @brief Param value unsupported. */
+        CommandAdmissionCancelled, /**< @brief Transmission admission was revoked. */
     };
 
     /**

@@ -5,6 +5,7 @@
 #include "mavlink_address.hpp"
 #include "mavlink_channels.hpp"
 #include "mavlink_command_receiver.hpp"
+#include "operation_options.hpp"
 #include "mavlink_mission_transfer_server.hpp"
 #include "mavlink_parameter_server.hpp"
 #include "mavlink_request_message_handler.hpp"
@@ -134,7 +135,9 @@ public:
     bool send_command_ack(mavlink_command_ack_t& command_ack);
 
     bool queue_message(
-        std::function<mavlink_message_t(MavlinkAddress mavlink_addres, uint8_t channel)> fun);
+        std::function<mavlink_message_t(MavlinkAddress mavlink_addres, uint8_t channel)> fun,
+        TransmissionAdmission transmission_admission = {},
+        std::function<void()> on_admission_denied = {});
 
     // Get MessageSet for message creation and parsing (shared per Mavsdk instance).
     mav::MessageSet& get_message_set() const;

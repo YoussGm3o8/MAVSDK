@@ -205,12 +205,15 @@ bool ServerComponentImpl::send_command_ack(mavlink_command_ack_t& command_ack)
 }
 
 bool ServerComponentImpl::queue_message(
-    std::function<mavlink_message_t(MavlinkAddress mavlink_address, uint8_t channel)> fun)
+    std::function<mavlink_message_t(MavlinkAddress mavlink_address, uint8_t channel)> fun,
+    TransmissionAdmission transmission_admission,
+    std::function<void()> on_admission_denied)
 {
     std::lock_guard<std::mutex> lock(_mavlink_pack_mutex);
     MavlinkAddress mavlink_address{get_own_system_id(), get_own_component_id()};
     mavlink_message_t message = fun(mavlink_address, _channel);
-    return _mavsdk_impl.send_message(message);
+    return _mavsdk_impl.send_message(
+        message, std::move(transmission_admission), std::move(on_admission_denied));
 }
 
 mav::MessageSet& ServerComponentImpl::get_message_set() const

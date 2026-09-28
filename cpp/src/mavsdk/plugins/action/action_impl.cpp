@@ -250,8 +250,9 @@ Action::Result ActionImpl::goto_location_relative_impl(
         const auto result = deadline ?
                                 _system_impl->set_flight_mode(
                                     *required_mode,
-                                    OperationOptions{remaining_budget(
-                                        *deadline, _system_impl->get_time().steady_time())}) :
+                                    OperationOptions{
+                                        remaining_budget(*deadline, _system_impl->get_time().steady_time()),
+                                        options->transmission_admission}) :
                                 _system_impl->set_flight_mode(*required_mode);
         if (result != MavlinkCommandSender::Result::Success) {
             return action_result_from_command_result(result);
@@ -266,8 +267,9 @@ Action::Result ActionImpl::goto_location_relative_impl(
         _system_impl->get_autopilot_id());
     const auto result = deadline ? _system_impl->send_command(
                                        command,
-                                       OperationOptions{remaining_budget(
-                                           *deadline, _system_impl->get_time().steady_time())}) :
+                                       OperationOptions{
+                                           remaining_budget(*deadline, _system_impl->get_time().steady_time()),
+                                           options->transmission_admission}) :
                                    _system_impl->send_command(command);
     return action_result_from_command_result(result);
 }
@@ -1150,6 +1152,8 @@ Action::Result ActionImpl::action_result_from_command_result(MavlinkCommandSende
             return Action::Result::Timeout;
         case MavlinkCommandSender::Result::Unsupported:
             return Action::Result::Unsupported;
+        case MavlinkCommandSender::Result::AdmissionCancelled:
+            return Action::Result::Unknown;
         default:
             return Action::Result::Unknown;
     }

@@ -218,6 +218,8 @@ MavlinkPassthroughImpl::to_mavlink_passthrough_result_from_mavlink_commands_resu
             return MavlinkPassthrough::Result::CommandFailed;
         case MavlinkCommandSender::Result::Timeout:
             return MavlinkPassthrough::Result::CommandTimeout;
+        case MavlinkCommandSender::Result::AdmissionCancelled:
+            return MavlinkPassthrough::Result::CommandAdmissionCancelled;
         default:
             // FALLTHROUGH
         case MavlinkCommandSender::Result::InProgress: // FIXME: currently not expected
