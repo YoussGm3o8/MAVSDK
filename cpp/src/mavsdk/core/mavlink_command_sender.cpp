@@ -692,13 +692,8 @@ bool MavlinkCommandSender::transmission_is_admitted(const Work& work) const
         return true;
     }
 
-    try {
-        const std::function<void()> no_transmission = [] {};
-        return work.transmission_admission(no_transmission);
-    } catch (...) {
-        LogErr("Transmission admission callback threw an exception");
-        return false;
-    }
+    const std::function<void()> no_transmission = [] {};
+    return work.transmission_admission(no_transmission);
 }
 
 bool MavlinkCommandSender::send_mavlink_message(
