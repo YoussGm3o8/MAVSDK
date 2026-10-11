@@ -366,6 +366,8 @@ private:
     // Lifetime CallEvery cookie for the 1 Hz heartbeat tick. Registered once
     // and left running; maybe_send_heartbeats() decides whether to send.
     CallEveryHandler::Cookie _heartbeat_send_cookie{0};
+    // Protected by _heartbeat_mutex; includes the queued delivery of the whole batch.
+    bool _heartbeat_send_pending{false};
 
     // Cached from _configuration so that the heartbeat tick can evaluate the
     // policy and the watchdog in one critical section. Guarded by

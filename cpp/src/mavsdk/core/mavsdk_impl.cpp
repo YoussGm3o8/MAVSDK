@@ -1274,13 +1274,13 @@ Mavsdk::ConnectionHandle MavsdkImpl::add_connection(std::unique_ptr<Connection>&
     new_connection->set_handle(handle);
     _connections.emplace_back(ConnectionEntry{std::move(new_connection), handle});
 
-    // The heartbeat tick runs whether or not there is anywhere to send, and
-    // maybe_send_heartbeats() just returns when there is not -- which costs a whole
-    // interval. Make the next one due now that there is a connection, so the first
-    // heartbeat does not depend on how long the application took to get here.
+    // Wake the first connection promptly unless a queued heartbeat will already reach it.
+    // Further connections join the existing cadence instead of creating another tick.
     {
         std::lock_guard<std::mutex> heartbeat_lock(_heartbeat_mutex);
-        call_every_handler.call_soon(_heartbeat_send_cookie);
+        if (_connections.size() == 1 && !_heartbeat_send_pending) {
+            call_every_handler.call_soon(_heartbeat_send_cookie);
+        }
     }
 
     return handle;
@@ -1826,7 +1826,7 @@ void MavsdkImpl::maybe_send_heartbeats()
     {
         std::lock_guard<std::mutex> lock(_heartbeat_mutex);
 
-        if (!_heartbeat_watchdog.allows_sending()) {
+        if (_heartbeat_send_pending || !_heartbeat_watchdog.allows_sending()) {
             return;
         }
 
@@ -1842,7 +1842,18 @@ void MavsdkImpl::maybe_send_heartbeats()
     }
 
     default_server_component_impl();
+    {
+        std::lock_guard<std::mutex> lock(_heartbeat_mutex);
+        _heartbeat_send_pending = true;
+    }
     send_heartbeats();
+    // send_message() posts each delivery to this same io_context. Reset after those
+    // deliveries, so a stalled send cannot leave an overdue tick that bursts on resume.
+    asio::post(_io_context, [this]() {
+        std::lock_guard<std::mutex> lock(_heartbeat_mutex);
+        call_every_handler.reset(_heartbeat_send_cookie);
+        _heartbeat_send_pending = false;
+    });
 }
 
 ServerComponentImpl& MavsdkImpl::default_server_component_impl()
