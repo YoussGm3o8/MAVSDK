@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdint>
 #include <chrono>
+#include <future>
 
 #include <asio/ip/udp.hpp>
 
@@ -36,6 +37,7 @@ public:
     const UdpConnection& operator=(const UdpConnection&) = delete;
 
 private:
+    friend struct UdpConnectionTestAccess;
     ConnectionResult setup_port();
     void do_receive();
 
@@ -71,6 +73,13 @@ private:
     asio::ip::udp::socket _socket;
     asio::ip::udp::endpoint _sender_endpoint{};
     std::array<uint8_t, 2048> _recv_buffer{};
+
+    // After start(), only the io thread changes these flags. stop() waits for
+    // the canceled receive itself before the socket, endpoint and buffer can die.
+    bool _stopping{false};
+    bool _receive_pending{false};
+    std::promise<void> _receive_stopped{};
+    std::shared_future<void> _receive_stopped_future{_receive_stopped.get_future().share()};
 
     // Timeout for inactive connections in seconds
     static constexpr std::chrono::seconds REMOTE_TIMEOUT{10};

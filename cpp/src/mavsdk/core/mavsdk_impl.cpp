@@ -134,8 +134,13 @@ MavsdkImpl::~MavsdkImpl()
         _heartbeat_send_cookie = 0;
     }
 
+    // Drain pending receives while their I/O thread still runs. Keep the connections
+    // owned until after joining, so any other queued handlers also see live objects.
+    for (auto* connection : get_connections()) {
+        connection->stop();
+    }
+
     // Stop the Asio io_context so _io_thread exits io_context::run().
-    // This also cancels any pending async_receive_from operations on UdpConnection sockets.
     _io_work_guard.reset();
     _io_context.stop();
     if (_io_thread) {
