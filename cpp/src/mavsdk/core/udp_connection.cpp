@@ -47,6 +47,11 @@ UdpConnection::~UdpConnection()
 
 ConnectionResult UdpConnection::start()
 {
+    _stopping = false;
+    _receive_pending = false;
+    _receive_stopped = std::promise<void>{};
+    _receive_stopped_future = _receive_stopped.get_future().share();
+
     if (!start_mavlink_receiver()) {
         return ConnectionResult::ConnectionsExhausted;
     }
@@ -119,52 +124,35 @@ ConnectionResult UdpConnection::setup_port()
 
 ConnectionResult UdpConnection::stop()
 {
-    // This posts onto the io_context and waits, so it must not run on the io thread.
     assert(!_mavsdk_impl.on_io_thread());
-
-    if (_socket.is_open()) {
-        auto& io_ctx = io_context();
-
-        if (!io_ctx.stopped()) {
-            // Close the socket from the io_context thread to avoid a data race
-            // with a concurrent async_receive_from() call. Because io_ctx is
-            // driven by a single thread, posting the close here serialises it
-            // with any in-flight socket access — the close can only run between
-            // handler invocations, never while async_receive_from() is reading
-            // the socket's internal state.
-            std::promise<void> close_done;
-            asio::post(io_ctx, [this, &close_done]() {
-                // send_raw_bytes() calls _socket.send_to() synchronously on a caller
-                // thread while holding _remote_mutex, so take it here too: closing the
-                // socket concurrently with an in-flight send_to is a data race.
+    auto& io_ctx = io_context();
+    if (!io_ctx.stopped()) {
+        std::promise<void> close_done;
+        auto closed = close_done.get_future();
+        asio::post(io_ctx, [this, &close_done]() {
+            if (!_stopping) {
+                _stopping = true;
+                // Synchronous send_to also owns this mutex.
                 std::lock_guard<std::mutex> lock(_remote_mutex);
                 asio::error_code ec;
                 _socket.close(ec);
-                close_done.set_value();
-            });
-            close_done.get_future().wait();
-
-            // close() cancelled any pending async_receive_from, so the
-            // operation_aborted completion handler is now queued. Wait for it
-            // to run (it will not re-post do_receive) before returning, so that
-            // callers can safely destroy UdpConnection's members.
-            std::promise<void> fence;
-            asio::post(io_ctx, [&fence]() { fence.set_value(); });
-            fence.get_future().wait();
-        } else {
-            // io_context has already been stopped (io_thread joined) — no
-            // concurrent async operation can be running, but a user thread could
-            // still call send_raw_bytes(), so guard the close with _remote_mutex.
-            std::lock_guard<std::mutex> lock(_remote_mutex);
-            asio::error_code ec;
-            _socket.close(ec);
-        }
+                if (!_receive_pending) {
+                    _receive_stopped.set_value();
+                }
+            }
+            close_done.set_value();
+        });
+        closed.wait();
+        // An unrelated posted fence does not drain an IOCP cancellation.
+        // The completion must release its endpoint/buffer references itself.
+        _receive_stopped_future.wait();
+    } else {
+        // MavsdkImpl joins the io thread before destroying its connections.
+        std::lock_guard<std::mutex> lock(_remote_mutex);
+        asio::error_code ec;
+        _socket.close(ec);
     }
-
-    // We need to stop this after stopping the socket, otherwise
-    // it can happen that we interfere with the parsing of a message.
     stop_mavlink_receiver();
-
     return ConnectionResult::Success;
 }
 
@@ -293,76 +281,94 @@ void UdpConnection::add_remote_impl(
 void UdpConnection::do_receive()
 {
     // Post an async receive. The handler runs on the dedicated io_context thread (_io_thread).
-    _socket.async_receive_from(
-        asio::buffer(_recv_buffer),
-        _sender_endpoint,
-        [this](const asio::error_code& ec, std::size_t recv_len) {
-            if (ec) {
-                // These are errors about one datagram, not about the socket. Windows
-                // reports an ICMP unreachable from an earlier send this way, meaning a
-                // remote that has gone away would otherwise end our receiving for good.
-                if (ec == asio::error::connection_refused || ec == asio::error::connection_reset ||
-                    ec == asio::error::network_reset || ec == asio::error::message_size) {
-                    LogDebug("Ignoring error from async_receive_from: {}", ec.message());
+    _receive_pending = true;
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+    try {
+#endif
+        _socket.async_receive_from(
+            asio::buffer(_recv_buffer),
+            _sender_endpoint,
+            [this](const asio::error_code& ec, std::size_t recv_len) {
+                _receive_pending = false;
+                if (_stopping) {
+                    _receive_stopped.set_value();
+                    return;
+                }
+
+                if (ec) {
+                    // These are errors about one datagram, not about the socket. Windows
+                    // reports an ICMP unreachable from an earlier send this way, meaning a
+                    // remote that has gone away would otherwise end our receiving for good.
+                    if (ec == asio::error::connection_refused ||
+                        ec == asio::error::connection_reset || ec == asio::error::network_reset ||
+                        ec == asio::error::message_size) {
+                        LogDebug("Ignoring error from async_receive_from: {}", ec.message());
+                        do_receive();
+                        return;
+                    }
+
+                    // operation_aborted happens when the socket is closed (stop()), which is
+                    // normal.
+                    if (ec != asio::error::operation_aborted) {
+                        // UDP is connectionless, but Windows can report an ICMP port-unreachable
+                        // response as connection_refused when a peer is temporarily offline. Keep
+                        // the receive loop alive so a later peer restart can be discovered again.
+                        if (_socket.is_open()) {
+                            LogWarn("Error from async_receive_from: {}; retrying", ec.message());
+                            do_receive();
+                        } else {
+                            LogErr("Error from async_receive_from: {}", ec.message());
+                        }
+                    }
+                    // Do not re-post after operation_aborted: the connection is being torn down.
+                    return;
+                }
+
+                if (recv_len == 0) {
+                    // Empty datagram — re-post and continue.
                     do_receive();
                     return;
                 }
 
-                // operation_aborted happens when the socket is closed (stop()), which is normal.
-                if (ec != asio::error::operation_aborted) {
-                    // UDP is connectionless, but Windows can report an ICMP port-unreachable
-                    // response as connection_refused when a peer is temporarily offline. Keep
-                    // the receive loop alive so a later peer restart can be discovered again.
-                    if (_socket.is_open()) {
-                        LogWarn("Error from async_receive_from: {}; retrying", ec.message());
-                        do_receive();
-                    } else {
-                        LogErr("Error from async_receive_from: {}", ec.message());
+                char* buffer = reinterpret_cast<char*>(_recv_buffer.data());
+
+                _mavlink_receiver->set_new_datagram(buffer, static_cast<int>(recv_len));
+
+                // Parse all mavlink messages in one datagram.
+                auto parse_result = _mavlink_receiver->parse_message();
+                while (parse_result != MavlinkReceiver::ParseResult::NoneAvailable) {
+                    if (parse_result == MavlinkReceiver::ParseResult::MessageParsed) {
+                        const uint8_t sysid = _mavlink_receiver->get_last_message().sysid;
+                        if (sysid != 0) {
+                            add_remote_impl(
+                                _sender_endpoint.address().to_string(),
+                                static_cast<int>(_sender_endpoint.port()),
+                                sysid,
+                                RemoteOption::Found);
+                        }
+                    }
+                    receive_message(parse_result, _mavlink_receiver->get_last_message(), this);
+                    parse_result = _mavlink_receiver->parse_message();
+                }
+
+                // Also parse with libmav if available
+                if (_libmav_receiver) {
+                    _libmav_receiver->set_new_datagram(buffer, static_cast<int>(recv_len));
+
+                    while (_libmav_receiver->parse_message()) {
+                        receive_libmav_message(_libmav_receiver->get_last_message(), this);
                     }
                 }
-                // Do not re-post after operation_aborted: the connection is being torn down.
-                return;
-            }
 
-            if (recv_len == 0) {
-                // Empty datagram — re-post and continue.
+                // Re-post for the next datagram.
                 do_receive();
-                return;
-            }
-
-            char* buffer = reinterpret_cast<char*>(_recv_buffer.data());
-
-            _mavlink_receiver->set_new_datagram(buffer, static_cast<int>(recv_len));
-
-            // Parse all mavlink messages in one datagram.
-            auto parse_result = _mavlink_receiver->parse_message();
-            while (parse_result != MavlinkReceiver::ParseResult::NoneAvailable) {
-                if (parse_result == MavlinkReceiver::ParseResult::MessageParsed) {
-                    const uint8_t sysid = _mavlink_receiver->get_last_message().sysid;
-                    if (sysid != 0) {
-                        add_remote_impl(
-                            _sender_endpoint.address().to_string(),
-                            static_cast<int>(_sender_endpoint.port()),
-                            sysid,
-                            RemoteOption::Found);
-                    }
-                }
-                receive_message(parse_result, _mavlink_receiver->get_last_message(), this);
-                parse_result = _mavlink_receiver->parse_message();
-            }
-
-            // Also parse with libmav if available
-            if (_libmav_receiver) {
-                _libmav_receiver->set_new_datagram(buffer, static_cast<int>(recv_len));
-
-                while (_libmav_receiver->parse_message()) {
-                    receive_libmav_message(_libmav_receiver->get_last_message(), this);
-                }
-            }
-
-            // Re-post for the next datagram.
-            do_receive();
-        });
+            });
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+    } catch (...) {
+        _receive_pending = false;
+        throw;
+    }
+#endif
 }
 
 } // namespace mavsdk
