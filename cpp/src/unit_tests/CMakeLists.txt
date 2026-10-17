@@ -40,3 +40,10 @@ add_test(NAME unit_tests
     COMMAND unit_tests_runner
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
+
+add_test(NAME embedded_xml_generation
+    COMMAND ${CMAKE_COMMAND}
+        "-DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/generate_embedded_xml.cmake"
+        "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/embedded-xml-test"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/embedded_xml_test.cmake"
+)
