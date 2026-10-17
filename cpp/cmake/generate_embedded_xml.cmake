@@ -61,7 +61,15 @@ ${ARDUPILOTMEGA_XML_CONSTANT}
 }
 ")
 
-# Write the header file
+# Preserve the header timestamp when generation has not changed its content.
+if(EXISTS "${OUTPUT_HEADER}")
+    file(READ "${OUTPUT_HEADER}" EXISTING_CONTENT)
+    if(EXISTING_CONTENT STREQUAL HEADER_CONTENT)
+        message(STATUS "Embedded XML header is unchanged: ${OUTPUT_HEADER}")
+        return()
+    endif()
+endif()
+
 file(WRITE "${OUTPUT_HEADER}" "${HEADER_CONTENT}")
 
 message(STATUS "Generated embedded XML header: ${OUTPUT_HEADER}")
